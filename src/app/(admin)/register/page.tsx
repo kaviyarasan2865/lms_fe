@@ -9,6 +9,7 @@ export default function AdminRegister() {
     email: "",
     password: "",
     confirmPassword: "",
+    phone_number: "",
   });
   const [loading, setLoading] = useState(false);
 
@@ -16,15 +17,50 @@ export default function AdminRegister() {
     setForm({ ...form, [e.target.name]: e.target.value });
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
 
-    // TODO: replace with API call
-    setTimeout(() => {
-      console.log("Registering admin:", form);
+    try {
+      const response = await fetch('http://127.0.0.1:8000/api/register/', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          username: form.email.split('@')[0], // Use email prefix as username
+          email: form.email,
+          first_name: form.name.split(' ')[0] || form.name,
+          last_name: form.name.split(' ').slice(1).join(' ') || '',
+          password: form.password,
+          password_confirm: form.confirmPassword,
+          phone_number: form.phone_number || '',
+          role: 'college_admin',
+          college_name: form.college,
+          college_code: form.college.replace(/\s+/g, '').toUpperCase().substring(0, 10), // Generate code from college name
+          course: 'MBBS', // Default course for medical colleges
+        }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        console.log('Registration successful:', data);
+        // Store tokens in localStorage
+        localStorage.setItem('access_token', data.tokens.access);
+        localStorage.setItem('refresh_token', data.tokens.refresh);
+        // Redirect to admin dashboard
+        window.location.href = '/admin-dashboard';
+      } else {
+        console.error('Registration failed:', data);
+        alert(`Registration failed: ${data.error || 'Unknown error'}`);
+      }
+    } catch (error) {
+      console.error('Registration error:', error);
+      alert('Registration failed. Please try again.');
+    } finally {
       setLoading(false);
-    }, 1500);
+    }
   };
 
   return (
@@ -94,6 +130,25 @@ export default function AdminRegister() {
               value={form.email}
               onChange={handleChange}
               placeholder="admin@college.edu"
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            />
+          </div>
+
+          {/* Phone Number */}
+          <div>
+            <label
+              htmlFor="phone_number"
+              className="block text-sm font-medium text-gray-700 mb-1"
+            >
+              Phone Number
+            </label>
+            <input
+              id="phone_number"
+              name="phone_number"
+              type="tel"
+              value={form.phone_number}
+              onChange={handleChange}
+              placeholder="+1234567890"
               className="w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             />
           </div>
