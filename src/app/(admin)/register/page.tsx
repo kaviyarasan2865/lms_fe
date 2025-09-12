@@ -98,6 +98,7 @@ export default function AdminRegister() {
               onChange={handleChange}
               placeholder="John Doe"
               className="w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              suppressHydrationWarning
             />
           </div>
 
@@ -118,6 +119,7 @@ export default function AdminRegister() {
               onChange={handleChange}
               placeholder="ABC Medical College"
               className="w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              suppressHydrationWarning
             />
           </div>
 
@@ -138,6 +140,7 @@ export default function AdminRegister() {
               onChange={handleChange}
               placeholder="admin@college.edu"
               className="w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              suppressHydrationWarning
             />
           </div>
 
@@ -157,6 +160,7 @@ export default function AdminRegister() {
               onChange={handleChange}
               placeholder="+1234567890"
               className="w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              suppressHydrationWarning
             />
           </div>
 
@@ -177,6 +181,7 @@ export default function AdminRegister() {
               onChange={handleChange}
               placeholder="••••••••"
               className="w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              suppressHydrationWarning
             />
           </div>
 
@@ -197,6 +202,7 @@ export default function AdminRegister() {
               onChange={handleChange}
               placeholder="••••••••"
               className="w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              suppressHydrationWarning
             />
           </div>
 
@@ -205,6 +211,7 @@ export default function AdminRegister() {
             type="submit"
             disabled={loading}
             className="w-full py-2 px-4 rounded-lg bg-blue-600 text-white font-medium hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 focus:outline-none transition-colors disabled:opacity-70"
+            suppressHydrationWarning
           >
             {loading ? "Registering..." : "Register"}
           </button>

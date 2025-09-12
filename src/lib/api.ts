@@ -1,91 +1,131 @@
+// API service functions for LMS
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000/api';
 
-export interface ApiResponse<T> {
-  data?: T;
-  error?: string;
-  message?: string;
+// Types
+export interface Batch {
+  id: number;
+  college: number;
+  college_name: string;
+  course: string;
+  year_of_joining: number;
+  name: string;
+  academic_year: number;
+  default_label: string;
+  start_date: string;
+  end_date: string;
+  auto_promote: boolean;
+  editable: boolean;
+  auto_promote_after_days: number;
+  student_count: number;
+  created_at: string;
+  updated_at: string;
 }
 
-export class ApiClient {
-  private baseURL: string;
+export interface CreateBatchData {
+  course: string;
+  year_of_joining: number;
+  name: string;
+  academic_year: number;
+  default_label: string;
+  start_date: string;
+  end_date: string;
+  auto_promote: boolean;
+  editable: boolean;
+  auto_promote_after_days: number;
+  college: number;
+}
 
-  constructor(baseURL: string = API_BASE_URL) {
-    this.baseURL = baseURL;
+export interface UpdateBatchData extends Partial<CreateBatchData> {
+  id: number;
+}
+
+// Auth helper
+const getAuthHeaders = () => {
+  const token = localStorage.getItem('access_token');
+  return {
+    'Content-Type': 'application/json',
+    ...(token && { Authorization: `Bearer ${token}` }),
+  };
+};
+
+// API response wrapper
+const handleApiResponse = async (response: Response) => {
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
   }
+  return response.json();
+};
 
-  private async request<T>(
-    endpoint: string,
-    options: RequestInit = {}
-  ): Promise<ApiResponse<T>> {
-    const url = `${this.baseURL}${endpoint}`;
-    
-    const defaultHeaders = {
-      'Content-Type': 'application/json',
-    };
-
-    const config: RequestInit = {
-      ...options,
-      headers: {
-        ...defaultHeaders,
-        ...options.headers,
-      },
-    };
-
-    try {
-      const response = await fetch(url, config);
-      const data = await response.json();
-
-      if (!response.ok) {
-        return {
-          error: data.error || data.details || 'An error occurred',
-        };
-      }
-
-      return { data };
-    } catch (error) {
-      return {
-        error: error instanceof Error ? error.message : 'Network error',
-      };
-    }
-  }
-
-  async get<T>(endpoint: string, token?: string): Promise<ApiResponse<T>> {
-    return this.request<T>(endpoint, {
-      method: 'GET',
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
+// Batch API functions
+export const batchApi = {
+  // Get all batches
+  getAll: async (): Promise<Batch[]> => {
+    const response = await fetch(`${API_BASE_URL}/batches/`, {
+      headers: getAuthHeaders(),
     });
-  }
+    return handleApiResponse(response);
+  },
 
-  async post<T>(
-    endpoint: string,
-    data?: any,
-    token?: string
-  ): Promise<ApiResponse<T>> {
-    return this.request<T>(endpoint, {
+  // Get single batch
+  getById: async (id: number): Promise<Batch> => {
+    const response = await fetch(`${API_BASE_URL}/batches/${id}/`, {
+      headers: getAuthHeaders(),
+    });
+    return handleApiResponse(response);
+  },
+
+  // Create new batch
+  create: async (data: CreateBatchData): Promise<Batch> => {
+    const response = await fetch(`${API_BASE_URL}/batches/`, {
       method: 'POST',
-      body: data ? JSON.stringify(data) : undefined,
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      headers: getAuthHeaders(),
+      body: JSON.stringify(data),
     });
-  }
+    return handleApiResponse(response);
+  },
 
-  async put<T>(
-    endpoint: string,
-    data?: any,
-    token?: string
-  ): Promise<ApiResponse<T>> {
-    return this.request<T>(endpoint, {
+  // Update batch
+  update: async (id: number, data: Partial<CreateBatchData>): Promise<Batch> => {
+    const response = await fetch(`${API_BASE_URL}/batches/${id}/`, {
       method: 'PUT',
-      body: data ? JSON.stringify(data) : undefined,
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      headers: getAuthHeaders(),
+      body: JSON.stringify(data),
     });
-  }
+    return handleApiResponse(response);
+  },
 
-  async delete<T>(endpoint: string, token?: string): Promise<ApiResponse<T>> {
-    return this.request<T>(endpoint, {
+  // Delete batch
+  delete: async (id: number): Promise<void> => {
+    const response = await fetch(`${API_BASE_URL}/batches/${id}/`, {
       method: 'DELETE',
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      headers: getAuthHeaders(),
     });
-  }
-}
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+    }
+  },
+};
 
-export const apiClient = new ApiClient();
+// College API functions
+export const collegeApi = {
+  // Get current user's college
+  getCurrent: async () => {
+    const response = await fetch(`${API_BASE_URL}/colleges/`, {
+      headers: getAuthHeaders(),
+    });
+    return handleApiResponse(response);
+  },
+};
+
+// User API functions
+export const userApi = {
+  // Get current user profile
+  getProfile: async () => {
+    const response = await fetch(`${API_BASE_URL}/user/profile/`, {
+      headers: getAuthHeaders(),
+    });
+    return handleApiResponse(response);
+  },
+};

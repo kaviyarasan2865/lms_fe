@@ -42,6 +42,7 @@ export const Sidebar = () => {
         <button
           onClick={() => setIsCollapsed(!isCollapsed)}
           className="p-2 rounded-lg hover:bg-gray-100 transition-colors"
+          suppressHydrationWarning
         >
           {isCollapsed ? <Menu size={20} /> : <X size={20} />}
         </button>
@@ -64,6 +65,7 @@ export const Sidebar = () => {
                       : "text-gray-700 hover:bg-gray-100"
                   }`}
                   title={isCollapsed ? item.label : undefined}
+                  suppressHydrationWarning
                 >
                   <Icon size={20} className="flex-shrink-0" />
                   {!isCollapsed && <span className="font-medium">{item.label}</span>}

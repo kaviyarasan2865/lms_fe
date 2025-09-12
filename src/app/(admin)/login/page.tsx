@@ -69,6 +69,7 @@ export default function AdminLogin() {
               onChange={(e) => setUsername(e.target.value)}
               className="w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               placeholder="admin@college.edu"
+              suppressHydrationWarning
             />
           </div>
 
@@ -88,6 +89,7 @@ export default function AdminLogin() {
               onChange={(e) => setPassword(e.target.value)}
               className="w-full rounded-lg border border-gray-300 px-3 py-2 text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               placeholder="••••••••"
+              suppressHydrationWarning
             />
           </div>
 
@@ -96,6 +98,7 @@ export default function AdminLogin() {
             type="submit"
             disabled={loading}
             className="w-full py-2 px-4 rounded-lg bg-blue-600 text-white font-medium hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 focus:outline-none transition-colors disabled:opacity-70"
+            suppressHydrationWarning
           >
             {loading ? "Signing in..." : "Login"}
           </button>
