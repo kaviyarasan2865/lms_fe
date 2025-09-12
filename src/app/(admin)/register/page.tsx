@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useAuth } from "@/contexts/AuthContext";
 
 export default function AdminRegister() {
   const [form, setForm] = useState({
@@ -12,6 +13,7 @@ export default function AdminRegister() {
     phone_number: "",
   });
   const [loading, setLoading] = useState(false);
+  const { login } = useAuth();
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setForm({ ...form, [e.target.name]: e.target.value });
@@ -46,11 +48,16 @@ export default function AdminRegister() {
 
       if (response.ok) {
         console.log('Registration successful:', data);
-        // Store tokens in localStorage
-        localStorage.setItem('access_token', data.tokens.access);
-        localStorage.setItem('refresh_token', data.tokens.refresh);
-        // Redirect to admin dashboard
-        window.location.href = '/admin-dashboard';
+        // Auto-login after successful registration
+        const loginResult = await login(form.email.split('@')[0], form.password);
+
+        if (loginResult.success) {
+          // Redirect to admin dashboard
+          window.location.href = '/admin-dashboard';
+        } else {
+          alert('Registration successful! Please login to continue.');
+          window.location.href = '/login';
+        }
       } else {
         console.error('Registration failed:', data);
         alert(`Registration failed: ${data.error || 'Unknown error'}`);
