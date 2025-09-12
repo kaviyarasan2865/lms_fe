@@ -42,17 +42,23 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           if (result.data) {
             setUser(result.data);
           } else {
+            // Token is invalid, clear it and redirect to login
             tokenManager.clearTokens();
+            setUser(null);
+            router.push('/login');
           }
         } catch (error) {
+          // Token is invalid, clear it and redirect to login
           tokenManager.clearTokens();
+          setUser(null);
+          router.push('/login');
         }
       }
       setIsLoading(false);
     };
 
     initAuth();
-  }, []);
+  }, [router]);
 
   const login = async (username: string, password: string) => {
     try {

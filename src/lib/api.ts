@@ -1,7 +1,20 @@
 // API service functions for LMS
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000/api';
 
+
 // Types
+export interface AcademicYear {
+  id: number;
+  year: number;
+  label: string;
+  start_date: string;
+  end_date: string;
+  auto_promote: boolean;
+  editable: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface Batch {
   id: number;
   college: number;
@@ -9,14 +22,9 @@ export interface Batch {
   course: string;
   year_of_joining: number;
   name: string;
-  academic_year: number;
-  default_label: string;
-  start_date: string;
-  end_date: string;
-  auto_promote: boolean;
-  editable: boolean;
   auto_promote_after_days: number;
   student_count: number;
+  academic_years: AcademicYear[];
   created_at: string;
   updated_at: string;
 }
@@ -25,14 +33,9 @@ export interface CreateBatchData {
   course: string;
   year_of_joining: number;
   name: string;
-  academic_year: number;
-  default_label: string;
-  start_date: string;
-  end_date: string;
-  auto_promote: boolean;
-  editable: boolean;
   auto_promote_after_days: number;
   college: number;
+  academic_years: Omit<AcademicYear, 'id' | 'created_at' | 'updated_at'>[];
 }
 
 export interface UpdateBatchData extends Partial<CreateBatchData> {
@@ -50,9 +53,21 @@ const getAuthHeaders = () => {
 
 // API response wrapper
 const handleApiResponse = async (response: Response) => {
+  if (response.status === 401) {
+    // Token expired, clear tokens and redirect to login
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('access_token');
+      localStorage.removeItem('refresh_token');
+      document.cookie = 'access_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+      document.cookie = 'refresh_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+      window.location.href = '/login';
+    }
+    throw new Error('Authentication required');
+  }
+  
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}));
-    throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+    throw new Error(errorData.detail || errorData.error || `HTTP error! status: ${response.status}`);
   }
   return response.json();
 };
