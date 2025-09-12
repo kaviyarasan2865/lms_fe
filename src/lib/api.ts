@@ -42,6 +42,44 @@ export interface UpdateBatchData extends Partial<CreateBatchData> {
   id: number;
 }
 
+// Student types
+export interface Student {
+  id: number;
+  user: {
+    id: number;
+    username: string;
+    email: string;
+    first_name: string;
+    last_name: string;
+  };
+  college: number;
+  college_name: string;
+  batch: number | null;
+  batch_name: string | null;
+  roll_no: string;
+  phone_number: string;
+  status: 'active' | 'inactive';
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreateStudentData {
+  username: string;
+  email: string;
+  first_name: string;
+  last_name: string;
+  password: string;
+  password_confirm: string;
+  roll_no: string;
+  phone_number: string;
+  college_id: number;
+  batch_id?: number | null;
+}
+
+export interface UpdateStudentData extends Partial<CreateStudentData> {
+  id: number;
+}
+
 // Auth helper
 const getAuthHeaders = () => {
   const token = localStorage.getItem('access_token');
@@ -49,6 +87,19 @@ const getAuthHeaders = () => {
     'Content-Type': 'application/json',
     ...(token && { Authorization: `Bearer ${token}` }),
   };
+};
+
+// Generic request helper
+const makeRequest = async (endpoint: string, options: RequestInit = {}) => {
+  const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+    ...options,
+    headers: {
+      ...getAuthHeaders(),
+      ...options.headers,
+    },
+  });
+
+  return handleApiResponse(response);
 };
 
 // API response wrapper
@@ -142,5 +193,74 @@ export const userApi = {
       headers: getAuthHeaders(),
     });
     return handleApiResponse(response);
+  },
+};
+
+// Student API functions
+export const studentApi = {
+  // Get all students
+  getAll: async (): Promise<Student[]> => {
+    return makeRequest('/students/');
+  },
+
+  // Get student by ID
+  getById: async (id: number): Promise<Student> => {
+    return makeRequest(`/students/${id}/`);
+  },
+
+  // Create student
+  create: async (data: CreateStudentData): Promise<Student> => {
+    return makeRequest('/students/register/', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  // Update student
+  update: async (id: number, data: UpdateStudentData): Promise<Student> => {
+    return makeRequest(`/students/${id}/`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  },
+
+  // Delete student
+  delete: async (id: number): Promise<void> => {
+    return makeRequest(`/students/${id}/`, {
+      method: 'DELETE',
+    });
+  },
+
+  // Bulk upload students
+  bulkUpload: async (file: File): Promise<{ message: string; created: number; errors: any[] }> => {
+    const formData = new FormData();
+    formData.append('file', file);
+    
+    const token = localStorage.getItem('access_token');
+    const response = await fetch(`${API_BASE_URL}/students/bulk-upload/`, {
+      method: 'POST',
+      headers: {
+        ...(token && { Authorization: `Bearer ${token}` }),
+      },
+      body: formData,
+    });
+
+    return handleApiResponse(response);
+  },
+
+  // Download student template
+  downloadTemplate: async (): Promise<Blob> => {
+    const token = localStorage.getItem('access_token');
+    const response = await fetch(`${API_BASE_URL}/students/download-template/`, {
+      headers: {
+        ...(token && { Authorization: `Bearer ${token}` }),
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to download template');
+    }
+
+    return response.blob();
   },
 };

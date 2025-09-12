@@ -1,52 +1,329 @@
 'use client'
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { studentApi, batchApi, collegeApi, type Student, type CreateStudentData, type Batch } from "@/lib/api";
+import { useAuth } from "@/contexts/AuthContext";
 
-interface Student {
-  id: string;
+interface LocalStudent {
+  id: number;
   fullName: string;
   rollNo: string;
   phoneNumber: string;
   email: string;
-  batch: string;
+  batch: number | null;
+  batchName: string | null;
   course: string;
+  collegeName: string;
   status: "active" | "inactive";
+  created_at: string;
+  updated_at: string;
+}
+
+interface FormData {
+  username: string;
+  email: string;
+  first_name: string;
+  last_name: string;
+  password: string;
+  password_confirm: string;
+  roll_no: string;
+  phone_number: string;
+  batch: number | null;
+  college_id?: number;
 }
 
 const StudentManagement = () => {
+  const { user } = useAuth();
   const [showForm, setShowForm] = useState(false);
   const [showBulkUpload, setShowBulkUpload] = useState(false);
-  const [students] = useState<Student[]>([
-    {
-      id: "1",
-      fullName: "John Doe",
-      rollNo: "MBBS001",
-      phoneNumber: "+91 9876543210",
-      email: "john.doe@example.com",
-      batch: "MBBS 2021",
-      course: "MBBS",
-      status: "active"
-    },
-    {
-      id: "2",
-      fullName: "Jane Smith",
-      rollNo: "MBBS002",
-      phoneNumber: "+91 9876543211",
-      email: "jane.smith@example.com",
-      batch: "MBBS 2021",
-      course: "MBBS",
-      status: "active"
-    },
-    {
-      id: "3",
-      fullName: "Mike Johnson",
-      rollNo: "MBBS003",
-      phoneNumber: "+91 9876543212",
-      email: "mike.johnson@example.com",
-      batch: "MBBS 2022",
-      course: "MBBS",
-      status: "inactive"
+  const [searchTerm, setSearchTerm] = useState("");
+  const [batchFilter, setBatchFilter] = useState("");
+  const [editingStudent, setEditingStudent] = useState<number | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+  const [collegeName, setCollegeName] = useState("");
+  const [batches, setBatches] = useState<Batch[]>([]);
+  const [students, setStudents] = useState<LocalStudent[]>([]);
+  const [uploadFile, setUploadFile] = useState<File | null>(null);
+
+  const [formData, setFormData] = useState<FormData>({
+    username: '',
+    email: '',
+    first_name: '',
+    last_name: '',
+    password: '',
+    password_confirm: '',
+    roll_no: '',
+    phone_number: '',
+    batch: null,
+    college_id: undefined
+  });
+
+  // Load students, batches, and college info on component mount
+  useEffect(() => {
+    loadStudents();
+    loadBatches();
+    loadCollegeInfo();
+  }, []);
+
+  const loadStudents = async () => {
+    try {
+      setLoading(true);
+      const response = await studentApi.getAll();
+      
+      // Handle paginated response
+      let dataArray = [];
+      if (Array.isArray(response)) {
+        dataArray = response;
+      } else if (response && typeof response === 'object' && 'results' in response && Array.isArray((response as any).results)) {
+        dataArray = (response as any).results;
+      } else if (response && typeof response === 'object' && 'data' in response && Array.isArray((response as any).data)) {
+        dataArray = (response as any).data;
+      }
+
+      const localStudents = dataArray.map((student: any) => ({
+        id: student.id,
+        fullName: `${student.user.first_name} ${student.user.last_name}`,
+        rollNo: student.roll_no,
+        phoneNumber: student.phone_number,
+        email: student.user.email,
+        batch: student.batch,
+        batchName: student.batch_name,
+        course: 'NEET-PG', // Default course
+        collegeName: student.college_name,
+        status: student.status,
+        created_at: student.created_at,
+        updated_at: student.updated_at
+      }));
+
+      setStudents(localStudents);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load students');
+    } finally {
+      setLoading(false);
     }
-  ]);
+  };
+
+  const loadBatches = async () => {
+    try {
+      const response = await batchApi.getAll();
+      
+      // Handle paginated response
+      let dataArray = [];
+      if (Array.isArray(response)) {
+        dataArray = response;
+      } else if (response && typeof response === 'object' && 'results' in response && Array.isArray((response as any).results)) {
+        dataArray = (response as any).results;
+      } else if (response && typeof response === 'object' && 'data' in response && Array.isArray((response as any).data)) {
+        dataArray = (response as any).data;
+      }
+
+      setBatches(dataArray);
+    } catch (err) {
+      console.error('Failed to load batches:', err);
+    }
+  };
+
+  const loadCollegeInfo = async () => {
+    try {
+      const response = await collegeApi.getCurrent();
+      
+      // Handle paginated response
+      let dataArray = [];
+      if (Array.isArray(response)) {
+        dataArray = response;
+      } else if (response && typeof response === 'object' && 'results' in response && Array.isArray((response as any).results)) {
+        dataArray = (response as any).results;
+      } else if (response && typeof response === 'object' && 'data' in response && Array.isArray((response as any).data)) {
+        dataArray = (response as any).data;
+      }
+
+      if (dataArray.length > 0) {
+        const college = dataArray[0];
+        setCollegeName(college.name);
+        setFormData(prev => ({ ...prev, college_id: college.id }));
+      }
+    } catch (err) {
+      console.error('Failed to load college info:', err);
+    }
+  };
+
+  const resetForm = () => {
+    setFormData({
+      username: '',
+      email: '',
+      first_name: '',
+      last_name: '',
+      password: '',
+      password_confirm: '',
+      roll_no: '',
+      phone_number: '',
+      batch: null,
+      college_id: formData.college_id // Preserve college_id
+    });
+    setEditingStudent(null);
+    setError("");
+    setSuccess("");
+  };
+
+  const handleFormSubmit = async () => {
+    if (!formData.first_name.trim() || !formData.last_name.trim()) {
+      setError('Please enter first name and last name');
+      return;
+    }
+
+    if (!formData.email.trim()) {
+      setError('Please enter email address');
+      return;
+    }
+
+    if (!formData.roll_no.trim()) {
+      setError('Please enter roll number');
+      return;
+    }
+
+    if (!formData.phone_number.trim()) {
+      setError('Please enter phone number');
+      return;
+    }
+
+    if (!formData.college_id) {
+      setError('College information not loaded. Please refresh the page.');
+      return;
+    }
+
+    // Password validation for new students
+    if (!editingStudent) {
+      if (!formData.password.trim()) {
+        setError('Please enter a password');
+        return;
+      }
+      if (formData.password !== formData.password_confirm) {
+        setError('Passwords do not match');
+        return;
+      }
+    }
+
+    try {
+      setLoading(true);
+      setError("");
+
+      const studentData = {
+        username: formData.username || formData.email.split('@')[0],
+        email: formData.email,
+        first_name: formData.first_name,
+        last_name: formData.last_name,
+        password: formData.password || 'student123', // Default password
+        password_confirm: formData.password_confirm || formData.password || 'student123',
+        roll_no: formData.roll_no,
+        phone_number: formData.phone_number,
+        college_id: formData.college_id,
+        batch_id: formData.batch
+      };
+
+      if (editingStudent) {
+        // Update existing student
+        await studentApi.update(editingStudent, { ...studentData, id: editingStudent });
+        setSuccess('Student updated successfully!');
+      } else {
+        // Create new student
+        await studentApi.create(studentData);
+        setSuccess('Student created successfully!');
+      }
+
+      // Reload students
+      await loadStudents();
+      setShowForm(false);
+      resetForm();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to save student');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleEditStudent = (student: LocalStudent) => {
+    setFormData({
+      username: student.email.split('@')[0], // Generate username from email
+      email: student.email,
+      first_name: student.fullName.split(' ')[0] || '',
+      last_name: student.fullName.split(' ').slice(1).join(' ') || '',
+      password: '', // Don't pre-fill password
+      password_confirm: '', // Don't pre-fill password confirmation
+      roll_no: student.rollNo,
+      phone_number: student.phoneNumber,
+      batch: student.batch,
+      college_id: formData.college_id
+    });
+    setEditingStudent(student.id);
+    setShowForm(true);
+  };
+
+  const deleteStudent = async (id: number) => {
+    if (confirm('Are you sure you want to delete this student? This action cannot be undone.')) {
+      try {
+        setLoading(true);
+        await studentApi.delete(id);
+        setSuccess('Student deleted successfully!');
+        await loadStudents();
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to delete student');
+      } finally {
+        setLoading(false);
+      }
+    }
+  };
+
+  const handleBulkUpload = async () => {
+    if (!uploadFile) {
+      setError('Please select a CSV file to upload');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      setError("");
+      const result = await studentApi.bulkUpload(uploadFile);
+      setSuccess(`Bulk upload completed! ${result.created} students created.`);
+      setUploadFile(null);
+      setShowBulkUpload(false);
+      await loadStudents();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to upload students');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const downloadTemplate = async () => {
+    try {
+      const blob = await studentApi.downloadTemplate();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'student_template.csv';
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    } catch (err) {
+      setError('Failed to download template');
+    }
+  };
+
+  const handleCancelForm = () => {
+    setShowForm(false);
+    resetForm();
+  };
+
+  // Filter students based on search and batch filter
+  const filteredStudents = Array.isArray(students) ? students.filter(student => {
+    const matchesSearch = student.fullName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         student.rollNo.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         student.email.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesBatch = batchFilter === "" || student.batchName === batchFilter;
+    return matchesSearch && matchesBatch;
+  }) : [];
 
   return (
     <div className="min-h-screen bg-gray-50 p-4 sm:p-6 lg:p-8">
@@ -73,6 +350,18 @@ const StudentManagement = () => {
           </div>
         </div>
 
+        {/* Error and Success Messages */}
+        {error && (
+          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
+            {error}
+          </div>
+        )}
+        {success && (
+          <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg">
+            {success}
+          </div>
+        )}
+
         {/* Bulk Upload Section */}
         {showBulkUpload && (
           <div className="bg-white p-4 sm:p-6 rounded-lg border border-gray-200 shadow-sm">
@@ -83,28 +372,42 @@ const StudentManagement = () => {
                 <p className="text-sm text-gray-600 mb-3">Your CSV file should contain the following columns:</p>
                 <div className="bg-white p-3 rounded border border-gray-200 overflow-x-auto">
                   <code className="text-xs text-gray-800 whitespace-nowrap">
-                    full_name,roll_no,phone_number,email,year_of_joining
+                    first_name,last_name,email,roll_no,phone_number,year_of_joining
                   </code>
                 </div>
                 <p className="text-xs text-gray-500 mt-2 break-all">
-                  Example: John Doe,MBBS001,+91 9876543210,john@example.com,2021
+                  Example: John,Doe,john@example.com,MBBS001,+91 9876543210,2021
                 </p>
+                <button
+                  onClick={downloadTemplate}
+                  className="mt-2 px-3 py-1 bg-blue-100 text-blue-700 rounded text-sm hover:bg-blue-200 transition-colors"
+                >
+                  Download Template
+                </button>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-900 mb-2">Upload CSV File</label>
                 <input
                   type="file"
                   accept=".csv"
+                  onChange={(e) => setUploadFile(e.target.files?.[0] || null)}
                   className="w-full p-3 border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-sm sm:text-base"
+                  suppressHydrationWarning
                 />
               </div>
               <div className="flex flex-col sm:flex-row gap-3">
-                <button className="w-full sm:w-auto px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium text-sm sm:text-base">
-                  Upload Students
+                <button 
+                  onClick={handleBulkUpload}
+                  disabled={!uploadFile || loading}
+                  className="w-full sm:w-auto px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium text-sm sm:text-base disabled:opacity-50 disabled:cursor-not-allowed"
+                  suppressHydrationWarning
+                >
+                  {loading ? 'Uploading...' : 'Upload Students'}
                 </button>
                 <button
                   onClick={() => setShowBulkUpload(false)}
                   className="w-full sm:w-auto px-6 py-3 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 transition-colors font-medium text-sm sm:text-base"
+                  suppressHydrationWarning
                 >
                   Cancel
                 </button>
@@ -116,7 +419,9 @@ const StudentManagement = () => {
         {/* Individual Student Form */}
         {showForm && (
           <div className="bg-white p-4 sm:p-6 rounded-lg border border-gray-200 shadow-sm">
-            <h2 className="text-lg sm:text-xl font-semibold text-gray-900 mb-6">Add New Student</h2>
+            <h2 className="text-lg sm:text-xl font-semibold text-gray-900 mb-6">
+              {editingStudent ? 'Edit Student' : 'Add New Student'}
+            </h2>
             
             <div className="space-y-6">
               {/* Personal Information */}
@@ -124,37 +429,86 @@ const StudentManagement = () => {
                 <h3 className="text-base sm:text-lg font-medium text-gray-900 mb-4">Personal Information</h3>
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-900 mb-2">Full Name *</label>
+                    <label className="block text-sm font-medium text-gray-900 mb-2">First Name *</label>
                     <input
                       type="text"
-                      placeholder="Enter student's full name"
+                      value={formData.first_name}
+                      onChange={(e) => setFormData({...formData, first_name: e.target.value})}
+                      placeholder="Enter student's first name"
                       className="w-full p-3 border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-sm sm:text-base"
+                      suppressHydrationWarning
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-900 mb-2">Last Name *</label>
+                    <input
+                      type="text"
+                      value={formData.last_name}
+                      onChange={(e) => setFormData({...formData, last_name: e.target.value})}
+                      placeholder="Enter student's last name"
+                      className="w-full p-3 border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-sm sm:text-base"
+                      suppressHydrationWarning
                     />
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-900 mb-2">Roll Number *</label>
                     <input
                       type="text"
+                      value={formData.roll_no}
+                      onChange={(e) => setFormData({...formData, roll_no: e.target.value})}
                       placeholder="e.g., MBBS001"
                       className="w-full p-3 border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-sm sm:text-base"
+                      suppressHydrationWarning
                     />
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-900 mb-2">Phone Number *</label>
                     <input
                       type="tel"
+                      value={formData.phone_number}
+                      onChange={(e) => setFormData({...formData, phone_number: e.target.value})}
                       placeholder="+91 9876543210"
                       className="w-full p-3 border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-sm sm:text-base"
+                      suppressHydrationWarning
                     />
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-900 mb-2">Email *</label>
                     <input
                       type="email"
+                      value={formData.email}
+                      onChange={(e) => setFormData({...formData, email: e.target.value})}
                       placeholder="student@example.com"
                       className="w-full p-3 border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-sm sm:text-base"
+                      suppressHydrationWarning
                     />
                   </div>
+                  {!editingStudent && (
+                    <>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-900 mb-2">Password *</label>
+                        <input
+                          type="password"
+                          value={formData.password}
+                          onChange={(e) => setFormData({...formData, password: e.target.value})}
+                          placeholder="Enter password"
+                          className="w-full p-3 border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-sm sm:text-base"
+                          suppressHydrationWarning
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-900 mb-2">Confirm Password *</label>
+                        <input
+                          type="password"
+                          value={formData.password_confirm}
+                          onChange={(e) => setFormData({...formData, password_confirm: e.target.value})}
+                          placeholder="Confirm password"
+                          className="w-full p-3 border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-sm sm:text-base"
+                          suppressHydrationWarning
+                        />
+                      </div>
+                    </>
+                  )}
                 </div>
               </div>
 
@@ -167,8 +521,9 @@ const StudentManagement = () => {
                     <input
                       type="text"
                       className="w-full p-3 border border-gray-300 rounded-lg bg-gray-50 text-gray-600 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-sm sm:text-base"
-                      defaultValue="Medical College"
+                      value={collegeName}
                       disabled
+                      suppressHydrationWarning
                     />
                   </div>
                   <div>
@@ -176,8 +531,9 @@ const StudentManagement = () => {
                     <input
                       type="text"
                       className="w-full p-3 border border-gray-300 rounded-lg bg-gray-50 text-gray-600 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-sm sm:text-base"
-                      defaultValue="MBBS"
+                      value="NEET-PG"
                       disabled
+                      suppressHydrationWarning
                     />
                   </div>
                 </div>
@@ -187,25 +543,37 @@ const StudentManagement = () => {
               <div>
                 <h3 className="text-base sm:text-lg font-medium text-gray-900 mb-4">Batch Assignment</h3>
                 <div>
-                  <label className="block text-sm font-medium text-gray-900 mb-2">Year of Joining / Batch Name *</label>
-                  <select className="w-full p-3 border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-sm sm:text-base">
-                    <option value="">Select batch</option>
-                    <option value="2024">2024 - MBBS 2024</option>
-                    <option value="2023">2023 - MBBS 2023</option>
-                    <option value="2022">2022 - MBBS 2022</option>
-                    <option value="2021">2021 - MBBS 2021</option>
+                  <label className="block text-sm font-medium text-gray-900 mb-2">Select Batch</label>
+                  <select 
+                    value={formData.batch || ""}
+                    onChange={(e) => setFormData({...formData, batch: e.target.value ? parseInt(e.target.value) : null})}
+                    className="w-full p-3 border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-sm sm:text-base"
+                    suppressHydrationWarning
+                  >
+                    <option value="">Select batch (optional)</option>
+                    {batches.map((batch) => (
+                      <option key={batch.id} value={batch.id}>
+                        {batch.name} ({batch.year_of_joining})
+                      </option>
+                    ))}
                   </select>
                 </div>
               </div>
 
               {/* Action Buttons */}
               <div className="flex flex-col sm:flex-row gap-3 pt-4">
-                <button className="w-full sm:w-auto px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium text-sm sm:text-base">
-                  Add Student
+                <button 
+                  onClick={handleFormSubmit}
+                  disabled={loading}
+                  className="w-full sm:w-auto px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium text-sm sm:text-base disabled:opacity-50 disabled:cursor-not-allowed"
+                  suppressHydrationWarning
+                >
+                  {loading ? 'Saving...' : (editingStudent ? 'Update Student' : 'Add Student')}
                 </button>
                 <button
-                  onClick={() => setShowForm(false)}
+                  onClick={handleCancelForm}
                   className="w-full sm:w-auto px-6 py-3 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 transition-colors font-medium text-sm sm:text-base"
+                  suppressHydrationWarning
                 >
                   Cancel
                 </button>
@@ -224,21 +592,37 @@ const StudentManagement = () => {
               <input
                 type="text"
                 placeholder="Search students..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
                 className="w-full sm:w-64 px-4 py-2 border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-sm"
+                suppressHydrationWarning
               />
-              <select className="w-full sm:w-auto px-4 py-2 border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-sm">
+              <select 
+                value={batchFilter}
+                onChange={(e) => setBatchFilter(e.target.value)}
+                className="w-full sm:w-auto px-4 py-2 border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-sm"
+                suppressHydrationWarning
+              >
                 <option value="">All Batches</option>
-                <option value="2024">MBBS 2024</option>
-                <option value="2023">MBBS 2023</option>
-                <option value="2022">MBBS 2022</option>
-                <option value="2021">MBBS 2021</option>
+                {batches.map((batch) => (
+                  <option key={batch.id} value={batch.name}>
+                    {batch.name} ({batch.year_of_joining})
+                  </option>
+                ))}
               </select>
             </div>
           </div>
           
+          {loading && students.length === 0 ? (
+            <div className="text-center py-12">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+              <p className="mt-2 text-gray-600">Loading students...</p>
+            </div>
+          ) : (
+            <>
           {/* Mobile Card View */}
           <div className="block lg:hidden space-y-4">
-            {students.map((student) => (
+                {filteredStudents.map((student) => (
               <div key={student.id} className="border border-gray-200 rounded-lg p-4 bg-gray-50">
                 <div className="flex justify-between items-start mb-3">
                   <div className="flex-1">
@@ -260,15 +644,23 @@ const StudentManagement = () => {
                     <span className="whitespace-nowrap">{student.phoneNumber}</span>
                   </div>
                   <div>
-                    <span className="font-medium">Batch:</span> {student.batch}
+                        <span className="font-medium">Batch:</span> {student.batchName || 'Not assigned'}
                   </div>
                 </div>
                 
                 <div className="flex gap-2">
-                  <button className="flex-1 px-3 py-2 bg-indigo-100 text-indigo-700 rounded text-sm hover:bg-indigo-200 transition-colors">
+                      <button 
+                        onClick={() => handleEditStudent(student)}
+                        className="flex-1 px-3 py-2 bg-indigo-100 text-indigo-700 rounded text-sm hover:bg-indigo-200 transition-colors"
+                        suppressHydrationWarning
+                      >
                     Edit
                   </button>
-                  <button className="flex-1 px-3 py-2 bg-red-100 text-red-700 rounded text-sm hover:bg-red-200 transition-colors">
+                      <button 
+                        onClick={() => deleteStudent(student.id)}
+                        className="flex-1 px-3 py-2 bg-red-100 text-red-700 rounded text-sm hover:bg-red-200 transition-colors"
+                        suppressHydrationWarning
+                      >
                     Remove
                   </button>
                 </div>
@@ -291,13 +683,13 @@ const StudentManagement = () => {
                 </tr>
               </thead>
               <tbody>
-                {students.map((student) => (
+                    {filteredStudents.map((student) => (
                   <tr key={student.id} className="border-t border-gray-200">
                     <td className="p-3 font-medium text-gray-900 text-sm">{student.fullName}</td>
                     <td className="p-3 text-gray-700 text-sm">{student.rollNo}</td>
                     <td className="p-3 text-gray-700 text-sm break-all">{student.email}</td>
                     <td className="p-3 text-gray-700 text-sm whitespace-nowrap">{student.phoneNumber}</td>
-                    <td className="p-3 text-gray-700 text-sm">{student.batch}</td>
+                        <td className="p-3 text-gray-700 text-sm">{student.batchName || 'Not assigned'}</td>
                     <td className="p-3">
                       <span className={`px-2 py-1 rounded text-xs font-medium ${
                         student.status === "active" 
@@ -309,10 +701,18 @@ const StudentManagement = () => {
                     </td>
                     <td className="p-3">
                       <div className="flex gap-2">
-                        <button className="px-3 py-1 bg-indigo-100 text-indigo-700 rounded text-sm hover:bg-indigo-200 transition-colors">
+                            <button 
+                              onClick={() => handleEditStudent(student)}
+                              className="px-3 py-1 bg-indigo-100 text-indigo-700 rounded text-sm hover:bg-indigo-200 transition-colors"
+                              suppressHydrationWarning
+                            >
                           Edit
                         </button>
-                        <button className="px-3 py-1 bg-red-100 text-red-700 rounded text-sm hover:bg-red-200 transition-colors">
+                            <button 
+                              onClick={() => deleteStudent(student.id)}
+                              className="px-3 py-1 bg-red-100 text-red-700 rounded text-sm hover:bg-red-200 transition-colors"
+                              suppressHydrationWarning
+                            >
                           Remove
                         </button>
                       </div>
@@ -324,7 +724,7 @@ const StudentManagement = () => {
           </div>
 
           {/* Empty State (when no students) */}
-          {students.length === 0 && (
+              {filteredStudents.length === 0 && !loading && (
             <div className="text-center py-12">
               <div className="text-gray-400 mb-4">
                 <svg className="mx-auto h-12 w-12" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -336,10 +736,13 @@ const StudentManagement = () => {
               <button
                 onClick={() => setShowForm(true)}
                 className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                    suppressHydrationWarning
               >
                 Add Student
               </button>
             </div>
+              )}
+            </>
           )}
         </div>
       </div>
