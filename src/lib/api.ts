@@ -1,3 +1,104 @@
+// Faculty types
+export interface Faculty {
+  id: number;
+  user: {
+    id: number;
+    username: string;
+    email: string;
+    first_name: string;
+    last_name: string;
+  };
+  college: number;
+  college_name: string;
+  designation: string;
+  status: 'active' | 'inactive';
+  education_details: string;
+  department?: string;
+  subjects: Array<{ id: number; name: string }>;
+  subjects_list?: Array<{ id: number; name: string }>;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreateFacultyData {
+  username: string;
+  email: string;
+  first_name: string;
+  last_name: string;
+  password: string;
+  password_confirm: string;
+  college_id: number;
+  designation: string;
+  status: 'active' | 'inactive';
+  education_details: string;
+  department?: string;
+  subject_ids?: number[];
+}
+
+export interface UpdateFacultyData extends Partial<CreateFacultyData> {
+  id: number;
+}
+// Faculty API functions
+export const facultyApi = {
+  // Get all faculty
+  getAll: async (): Promise<Faculty[]> => {
+    return makeRequest('/faculties/');
+  },
+
+  // Get faculty by ID
+  getById: async (id: number): Promise<Faculty> => {
+    return makeRequest(`/faculties/${id}/`);
+  },
+
+  // Create faculty
+  create: async (data: CreateFacultyData): Promise<Faculty> => {
+    return makeRequest('/faculties/register/', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  // Update faculty
+  update: async (id: number, data: UpdateFacultyData): Promise<Faculty> => {
+    return makeRequest(`/faculties/${id}/`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  },
+
+  // Delete faculty
+  delete: async (id: number): Promise<void> => {
+    const token = localStorage.getItem('access_token');
+    const response = await fetch(`${API_BASE_URL}/faculties/${id}/`, {
+      method: 'DELETE',
+      headers: {
+        ...(token && { Authorization: `Bearer ${token}` }),
+      },
+    });
+
+    if (response.status === 401) {
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('access_token');
+        localStorage.removeItem('refresh_token');
+        document.cookie = 'access_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+        document.cookie = 'refresh_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+        window.location.href = '/login';
+      }
+      throw new Error('Authentication required');
+    }
+    if (!response.ok) {
+      const errorData = await response.text().then(text => {
+        try {
+          return JSON.parse(text);
+        } catch {
+          return { error: text || `HTTP error! status: ${response.status}` };
+        }
+      });
+      throw new Error(errorData.detail || errorData.error || `HTTP error! status: ${response.status}`);
+    }
+    return;
+  },
+};
 // API service functions for LMS
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000/api';
 

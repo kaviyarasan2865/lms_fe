@@ -38,16 +38,12 @@ const MEDICAL_SUBJECTS = [
 ];
 
 const DESIGNATIONS = [
-  "Assistant Professor",
-  "Associate Professor", 
-  "Professor",
-  "HOD",
-  "Dean",
-  "Lecturer",
-  "Senior Resident",
-  "Junior Resident",
-  "Tutor",
-  "Demonstrator"
+  { value: "assistant_professor", label: "Assistant Professor" },
+{ value: "professor", label: "Professor" },
+{ value: "hod", label: "Head of Department" },
+{ value: "dean", label: "Dean" },
+{ value: "lecturer", label: "Lecturer" },
+{ value: "senior_lecturer", label: "Senior Lecturer" }
 ];
 
 const DEPARTMENTS = [
@@ -59,6 +55,76 @@ const DEPARTMENTS = [
 ];
 
 const FacultyManagement = () => {
+  // Subject list for mapping names to IDs
+  const [subjectList, setSubjectList] = useState<{ id: number; name: string }[]>([]);
+
+  // Fetch subject list on mount
+  useEffect(() => {
+    const fetchSubjects = async () => {
+      try {
+        const { facultyApi } = await import("@/lib/api");
+        // Try both subjects and subjects_list from first faculty, fallback to empty
+        const apiData = await facultyApi.getAll();
+        let subjects: { id: number; name: string }[] = [];
+        if (apiData && typeof apiData === 'object' && 'results' in apiData && Array.isArray((apiData as any).results)) {
+          const first = (apiData as any).results[0];
+          subjects = first?.subjects_list || first?.subjects || [];
+        } else if (Array.isArray(apiData) && apiData.length > 0) {
+          subjects = apiData[0].subjects_list || apiData[0].subjects || [];
+        }
+        setSubjectList(subjects);
+      } catch {
+        setSubjectList([]);
+      }
+    };
+    fetchSubjects();
+  }, []);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+
+  // Load faculty from backend
+  useEffect(() => {
+    const fetchFaculty = async () => {
+      setLoading(true);
+      setError("");
+      try {
+        const { facultyApi } = await import("@/lib/api");
+        const apiData = await facultyApi.getAll();
+        console.log("Raw facultyApi.getAll() response:", apiData);
+          // Map API response to local Faculty structure
+          const facultyArray = (apiData && typeof apiData === 'object' && 'results' in apiData && Array.isArray((apiData as any).results))
+            ? (apiData as any).results
+            : Array.isArray(apiData)
+              ? apiData
+              : [];
+          const mappedFaculty = facultyArray.map((f: any) => ({
+            id: String(f.id),
+            fullName: `${f.user?.first_name || f.first_name || ""} ${f.user?.last_name || f.last_name || ""}`.trim(),
+            mobileNumber: f.user?.phone_number || f.phone_number || f.user?.mobileNumber || f.mobileNumber || "",
+            email: f.user?.email || f.email || "",
+            designation: f.designation || "",
+            status: f.status || "inactive",
+            subjects: Array.isArray(f.subjects_list) && f.subjects_list.length > 0
+              ? f.subjects_list.map((s: any) => s.name)
+              : Array.isArray(f.subjects) && f.subjects.length > 0
+                ? f.subjects.map((s: any) => s.name)
+                : [],
+            educationDetails: f.education_details || "",
+            dateAdded: f.created_at || "",
+            department: f.department || ""
+          }));
+        console.log("Mapped faculty for UI:", mappedFaculty);
+        setFaculty(mappedFaculty);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Failed to load faculty");
+        setFaculty([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchFaculty();
+  }, []);
   const [showForm, setShowForm] = useState(false);
   const [selectedSubjects, setSelectedSubjects] = useState<string[]>([]);
   const [customSubject, setCustomSubject] = useState("");
@@ -89,68 +155,7 @@ const FacultyManagement = () => {
   const [formErrors, setFormErrors] = useState<{[key: string]: string}>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const [faculty, setFaculty] = useState<Faculty[]>([
-    {
-      id: "1",
-      fullName: "Dr. Jane Smith",
-      mobileNumber: "+91 9876543210",
-      email: "jane.smith@medcollege.edu",
-      designation: "Professor",
-      status: "active",
-      subjects: ["Anatomy", "Physiology"],
-      educationDetails: "MBBS, MD (Anatomy), PhD",
-      dateAdded: "2023-01-15",
-      department: "Basic Sciences"
-    },
-    {
-      id: "2",
-      fullName: "Dr. John Doe",
-      mobileNumber: "+91 9876543211",
-      email: "john.doe@medcollege.edu",
-      designation: "Associate Professor",
-      status: "active",
-      subjects: ["Internal Medicine", "Cardiology"],
-      educationDetails: "MBBS, MD (Internal Medicine), DM (Cardiology)",
-      dateAdded: "2023-02-20",
-      department: "Clinical Sciences"
-    },
-    {
-      id: "3",
-      fullName: "Dr. Sarah Wilson",
-      mobileNumber: "+91 9876543212",
-      email: "sarah.wilson@medcollege.edu",
-      designation: "Assistant Professor",
-      status: "inactive",
-      subjects: ["Pediatrics", "Neonatology"],
-      educationDetails: "MBBS, MD (Pediatrics)",
-      dateAdded: "2023-03-10",
-      department: "Clinical Sciences"
-    },
-    {
-      id: "4",
-      fullName: "Dr. Michael Brown",
-      mobileNumber: "+91 9876543213",
-      email: "michael.brown@medcollege.edu",
-      designation: "HOD",
-      status: "active",
-      subjects: ["Surgery", "Trauma Surgery"],
-      educationDetails: "MBBS, MS (General Surgery), MCh (Trauma Surgery)",
-      dateAdded: "2023-01-05",
-      department: "Clinical Sciences"
-    },
-    {
-      id: "5",
-      fullName: "Dr. Emily Davis",
-      mobileNumber: "+91 9876543214",
-      email: "emily.davis@medcollege.edu",
-      designation: "Lecturer",
-      status: "active",
-      subjects: ["Biochemistry", "Clinical Biochemistry"],
-      educationDetails: "MBBS, MD (Biochemistry)",
-      dateAdded: "2023-04-12",
-      department: "Basic Sciences"
-    }
-  ]);
+  const [faculty, setFaculty] = useState<Faculty[]>([]);
 
   // Validation function
   const validateForm = () => {
@@ -224,25 +229,71 @@ const FacultyManagement = () => {
     
     setIsSubmitting(true);
     
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    
-    const facultyData: Faculty = {
-      id: editingFaculty ? editingFaculty.id : Date.now().toString(),
-      ...formData,
-      subjects: selectedSubjects,
-      dateAdded: editingFaculty ? editingFaculty.dateAdded : new Date().toISOString().split('T')[0]
-    };
-    
-    if (editingFaculty) {
-      setFaculty(prev => prev.map(f => f.id === editingFaculty.id ? facultyData : f));
-    } else {
-      setFaculty(prev => [...prev, facultyData]);
+    try {
+      const { facultyApi } = await import("@/lib/api");
+      // Prepare API payload
+      const nameParts = formData.fullName.trim().split(" ");
+      const firstName = nameParts[0] || "";
+      // If only one name part, set last_name to '.'
+      const lastName = nameParts.length > 1 ? nameParts.slice(1).join(" ") : ".";
+
+      // Map selectedSubjects (names) to subject IDs using subjectList
+      const subject_ids = selectedSubjects
+        .map(name => subjectList.find(s => s.name === name)?.id)
+        .filter((id): id is number => !!id);
+
+      const payload = {
+        username: formData.email.split("@")[0],
+        email: formData.email,
+        first_name: firstName,
+        last_name: lastName,
+        password: "faculty123", // TODO: allow password input if needed
+        password_confirm: "faculty123",
+        college_id: 1, // TODO: fetch actual college_id from context
+        designation: formData.designation,
+        status: formData.status,
+        education_details: formData.educationDetails,
+        department: formData.department,
+        subject_ids,
+        user: {
+          phone_number: formData.mobileNumber,
+        },
+      };
+      if (editingFaculty) {
+        const updatePayload = { ...payload, id: Number(editingFaculty.id) };
+        await facultyApi.update(Number(editingFaculty.id), updatePayload);
+        setSuccess("Faculty updated successfully!");
+      } else {
+        await facultyApi.create(payload);
+        setSuccess("Faculty created successfully!");
+      }
+      // Reload faculty list and map to local structure
+      const apiData = await facultyApi.getAll();
+      const facultyArray = (apiData && typeof apiData === 'object' && 'results' in apiData && Array.isArray((apiData as any).results))
+        ? (apiData as any).results
+        : Array.isArray(apiData)
+          ? apiData
+          : [];
+      const mappedFaculty = facultyArray.map((f: any) => ({
+        id: String(f.id),
+        fullName: `${f.user?.first_name || f.first_name || ""} ${f.user?.last_name || f.last_name || ""}`.trim(),
+        mobileNumber: f.user?.phone_number || f.phone_number || "",
+        email: f.user?.email || f.email || "",
+        designation: f.designation || "",
+        status: f.status || "inactive",
+        subjects: (f.subjects_list || f.subjects || []).map((s: any) => s?.name || s),
+        educationDetails: f.education_details || "",
+        dateAdded: f.created_at || "",
+        department: f.department || ""
+      }));
+      setFaculty(mappedFaculty);
+      resetForm();
+      setShowForm(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to save faculty");
+    } finally {
+      setIsSubmitting(false);
     }
-    
-    resetForm();
-    setShowForm(false);
-    setIsSubmitting(false);
   };
 
   const handleEdit = (member: Faculty) => {
@@ -253,16 +304,49 @@ const FacultyManagement = () => {
       designation: member.designation,
       status: member.status,
       educationDetails: member.educationDetails,
-      department: member.department
+      department: member.department || "" 
     });
     setSelectedSubjects(member.subjects);
     setEditingFaculty(member);
     setShowForm(true);
   };
 
-  const handleRemoveFaculty = (id: string) => {
-    setFaculty(prev => prev.filter(f => f.id !== id));
-    setShowDeleteConfirm(null);
+  const handleRemoveFaculty = async (id: number) => {
+    setLoading(true);
+    setError("");
+    try {
+      const { facultyApi } = await import("@/lib/api");
+      await facultyApi.delete(Number(id));
+      setSuccess("Faculty removed successfully!");
+      const apiData = await facultyApi.getAll();
+      const facultyArray = (apiData && typeof apiData === 'object' && 'results' in apiData && Array.isArray((apiData as any).results))
+        ? (apiData as any).results
+        : Array.isArray(apiData)
+          ? apiData
+          : [];
+      const mappedFaculty = facultyArray.map((f: any) => ({
+        id: String(f.id),
+        fullName: `${f.user?.first_name || f.first_name || ""} ${f.user?.last_name || f.last_name || ""}`.trim(),
+        mobileNumber: f.user?.phone_number || f.phone_number || f.user?.mobileNumber || f.mobileNumber || "",
+        email: f.user?.email || f.email || "",
+        designation: f.designation || "",
+        status: f.status || "inactive",
+        subjects: Array.isArray(f.subjects_list) && f.subjects_list.length > 0
+          ? f.subjects_list.map((s: any) => s.name)
+          : Array.isArray(f.subjects) && f.subjects.length > 0
+            ? f.subjects.map((s: any) => s.name)
+            : [],
+        educationDetails: f.education_details || "",
+        dateAdded: f.created_at || "",
+        department: f.department || ""
+      }));
+      setFaculty(mappedFaculty);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to remove faculty");
+    } finally {
+      setLoading(false);
+      setShowDeleteConfirm(null);
+    }
   };
 
   const handleSort = (field: 'name' | 'designation' | 'date') => {
@@ -530,9 +614,9 @@ const FacultyManagement = () => {
                       }`}
                     >
                       <option value="">Select designation</option>
-                      {DESIGNATIONS.map(designation => (
-                        <option key={designation} value={designation}>
-                          {designation}
+                      {DESIGNATIONS.map(d => (
+                        <option key={d.value} value={d.value}>
+                          {d.label}
                         </option>
                       ))}
                     </select>
@@ -733,9 +817,9 @@ const FacultyManagement = () => {
                 className="px-4 py-2 border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
               >
                 <option value="">All Designations</option>
-                {DESIGNATIONS.map(designation => (
-                  <option key={designation} value={designation}>
-                    {designation}
+                {DESIGNATIONS.map(d => (
+                  <option key={d.value} value={d.value}>
+                    {d.label}
                   </option>
                 ))}
               </select>
@@ -788,8 +872,8 @@ const FacultyManagement = () => {
               >
                 <option value="">All Designations</option>
                 {DESIGNATIONS.map(designation => (
-                  <option key={designation} value={designation}>
-                    {designation}
+                  <option key={designation.label} value={designation.value}>
+                    {designation.label}
                   </option>
                 ))}
               </select>
@@ -1119,7 +1203,7 @@ const FacultyManagement = () => {
                 
                 <div className="flex flex-col sm:flex-row gap-3">
                   <button
-                    onClick={() => handleRemoveFaculty(showDeleteConfirm)}
+                    onClick={() => handleRemoveFaculty(Number(showDeleteConfirm))}
                     className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium"
                   >
                     Yes, Remove
