@@ -6,6 +6,7 @@ import { useAuth } from "@/contexts/AuthContext";
 interface LocalStudent {
   id: number;
   fullName: string;
+  username: string;
   rollNo: string;
   phoneNumber: string;
   email: string;
@@ -83,15 +84,18 @@ const StudentManagement = () => {
 
       const localStudents = dataArray.map((student: any) => ({
         id: student.id,
-        fullName: `${student.user.first_name} ${student.user.last_name}`,
-        rollNo: student.roll_no,
-        phoneNumber: student.phone_number,
-        email: student.user.email,
+        fullName: `${student.user?.first_name || ''} ${student.user?.last_name || ''}`.trim(),
+        first_name: student.user?.first_name || '',
+        last_name: student.user?.last_name || '',
+        username: student.user?.username || '',
+        rollNo: student.roll_no || '',
+        phoneNumber: student.phone_number || '',
+        email: student.user?.email || '',
         batch: student.batch,
         batchName: student.batch_name,
         course: 'NEET-PG', // Default course
         collegeName: student.college_name,
-        status: student.status,
+        status: student.is_active ? 'active' : 'inactive',
         created_at: student.created_at,
         updated_at: student.updated_at
       }));
@@ -167,23 +171,49 @@ const StudentManagement = () => {
   };
 
   const handleFormSubmit = async () => {
-    if (!formData.first_name.trim() || !formData.last_name.trim()) {
-      setError('Please enter first name and last name');
+    // Reset any previous errors
+    setError('');
+
+    // Full name validation
+    if (!formData.first_name.trim()) {
+      setError('Please enter student\'s first name');
       return;
     }
 
+    if (!formData.last_name.trim()) {
+      setError('Please enter student\'s last name');
+      return;
+    }
+
+    // Email validation
     if (!formData.email.trim()) {
       setError('Please enter email address');
       return;
     }
 
+    // Basic email format validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(formData.email)) {
+      setError('Please enter a valid email address');
+      return;
+    }
+
+    // Roll number validation
     if (!formData.roll_no.trim()) {
       setError('Please enter roll number');
       return;
     }
 
+    // Phone number validation
     if (!formData.phone_number.trim()) {
       setError('Please enter phone number');
+      return;
+    }
+
+    // Basic phone number format validation (Indian phone numbers)
+    const phoneRegex = /^[\+]?[1-9][\d]{9,14}$/;
+    if (!phoneRegex.test(formData.phone_number.replace(/[\s\-\(\)]/g, ''))) {
+      setError('Please enter a valid phone number (10-15 digits)');
       return;
     }
 
@@ -192,10 +222,19 @@ const StudentManagement = () => {
       return;
     }
 
-    // Password validation for new students
+    // Username validation - generate if not provided
+    if (!formData.username.trim()) {
+      setFormData(prev => ({ ...prev, username: prev.email.split('@')[0] }));
+    }
+
+    // Password validation for new students only
     if (!editingStudent) {
       if (!formData.password.trim()) {
-        setError('Please enter a password');
+        setError('Please enter a password for the student');
+        return;
+      }
+      if (formData.password.length < 6) {
+        setError('Password must be at least 6 characters long');
         return;
       }
       if (formData.password !== formData.password_confirm) {
@@ -244,12 +283,12 @@ const StudentManagement = () => {
 
   const handleEditStudent = (student: LocalStudent) => {
     setFormData({
-      username: student.email.split('@')[0], // Generate username from email
+      username: student.username || student.email.split('@')[0],
       email: student.email,
-      first_name: student.fullName.split(' ')[0] || '',
-      last_name: student.fullName.split(' ').slice(1).join(' ') || '',
-      password: '', // Don't pre-fill password
-      password_confirm: '', // Don't pre-fill password confirmation
+      first_name: student.first_name || '',
+      last_name: student.last_name || '',
+      password: '',
+      password_confirm: '',
       roll_no: student.rollNo,
       phone_number: student.phoneNumber,
       batch: student.batch,
@@ -263,11 +302,18 @@ const StudentManagement = () => {
     if (confirm('Are you sure you want to delete this student? This action cannot be undone.')) {
       try {
         setLoading(true);
+        setError('');
+        setSuccess('');
         await studentApi.delete(id);
         setSuccess('Student deleted successfully!');
         await loadStudents();
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to delete student');
+        console.error('Delete student error:', err);
+        if (err instanceof Error) {
+          setError(`Failed to delete student: ${err.message}`);
+        } else {
+          setError('Failed to delete student. Please try again.');
+        }
       } finally {
         setLoading(false);
       }
@@ -319,6 +365,7 @@ const StudentManagement = () => {
   // Filter students based on search and batch filter
   const filteredStudents = Array.isArray(students) ? students.filter(student => {
     const matchesSearch = student.fullName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         student.username.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          student.rollNo.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          student.email.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesBatch = batchFilter === "" || student.batchName === batchFilter;
@@ -372,11 +419,11 @@ const StudentManagement = () => {
                 <p className="text-sm text-gray-600 mb-3">Your CSV file should contain the following columns:</p>
                 <div className="bg-white p-3 rounded border border-gray-200 overflow-x-auto">
                   <code className="text-xs text-gray-800 whitespace-nowrap">
-                    first_name,last_name,email,roll_no,phone_number,year_of_joining
+                    username,email,first_name,last_name,password,roll_no,phone_number,date_of_birth,address,emergency_contact,emergency_contact_name,admission_date,batch_id
                   </code>
                 </div>
                 <p className="text-xs text-gray-500 mt-2 break-all">
-                  Example: John,Doe,john@example.com,MBBS001,+91 9876543210,2021
+                  Example: john.doe,john@example.com,John,Doe,password123,MBBS001,+91 9876543210,1995-01-15,123 Street,+91 9876543211,Parent Name,2024-01-15,1
                 </p>
                 <button
                   onClick={downloadTemplate}
@@ -477,8 +524,27 @@ const StudentManagement = () => {
                     <input
                       type="email"
                       value={formData.email}
-                      onChange={(e) => setFormData({...formData, email: e.target.value})}
+                      onChange={(e) => {
+                        const email = e.target.value;
+                        setFormData({
+                          ...formData, 
+                          email,
+                          // Auto-generate username from email if username is empty
+                          username: formData.username || email.split('@')[0]
+                        });
+                      }}
                       placeholder="student@example.com"
+                      className="w-full p-3 border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-sm sm:text-base"
+                      suppressHydrationWarning
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-900 mb-2">Username *</label>
+                    <input
+                      type="text"
+                      value={formData.username}
+                      onChange={(e) => setFormData({...formData, username: e.target.value})}
+                      placeholder="Auto-generated from email"
                       className="w-full p-3 border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-sm sm:text-base"
                       suppressHydrationWarning
                     />
@@ -640,6 +706,9 @@ const StudentManagement = () => {
                 
                 <div className="space-y-2 text-sm text-gray-600 mb-4">
                   <div className="flex flex-wrap gap-4">
+                    <span className="font-medium">Username:</span> {student.username}
+                  </div>
+                  <div className="flex flex-wrap gap-4">
                     <span className="break-all">{student.email}</span>
                     <span className="whitespace-nowrap">{student.phoneNumber}</span>
                   </div>
@@ -674,6 +743,7 @@ const StudentManagement = () => {
               <thead className="bg-gray-50">
                 <tr>
                   <th className="p-3 text-left font-medium text-gray-900 text-sm">Name</th>
+                  <th className="p-3 text-left font-medium text-gray-900 text-sm">Username</th>
                   <th className="p-3 text-left font-medium text-gray-900 text-sm">Roll No</th>
                   <th className="p-3 text-left font-medium text-gray-900 text-sm">Email</th>
                   <th className="p-3 text-left font-medium text-gray-900 text-sm">Phone</th>
@@ -686,6 +756,7 @@ const StudentManagement = () => {
                     {filteredStudents.map((student) => (
                   <tr key={student.id} className="border-t border-gray-200">
                     <td className="p-3 font-medium text-gray-900 text-sm">{student.fullName}</td>
+                    <td className="p-3 text-gray-700 text-sm">{student.username}</td>
                     <td className="p-3 text-gray-700 text-sm">{student.rollNo}</td>
                     <td className="p-3 text-gray-700 text-sm break-all">{student.email}</td>
                     <td className="p-3 text-gray-700 text-sm whitespace-nowrap">{student.phoneNumber}</td>

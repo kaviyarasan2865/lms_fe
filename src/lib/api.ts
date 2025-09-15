@@ -226,9 +226,39 @@ export const studentApi = {
 
   // Delete student
   delete: async (id: number): Promise<void> => {
-    return makeRequest(`/students/${id}/`, {
+    const token = localStorage.getItem('access_token');
+    const response = await fetch(`${API_BASE_URL}/students/${id}/`, {
       method: 'DELETE',
+      headers: {
+        ...(token && { Authorization: `Bearer ${token}` }),
+      },
     });
+
+    if (response.status === 401) {
+      // Token expired, clear tokens and redirect to login
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('access_token');
+        localStorage.removeItem('refresh_token');
+        document.cookie = 'access_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+        document.cookie = 'refresh_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+        window.location.href = '/login';
+      }
+      throw new Error('Authentication required');
+    }
+    
+    if (!response.ok) {
+      const errorData = await response.text().then(text => {
+        try {
+          return JSON.parse(text);
+        } catch {
+          return { error: text || `HTTP error! status: ${response.status}` };
+        }
+      });
+      throw new Error(errorData.detail || errorData.error || `HTTP error! status: ${response.status}`);
+    }
+    
+    // Delete operations typically return 204 No Content with no body
+    return;
   },
 
   // Bulk upload students
