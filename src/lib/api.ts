@@ -59,7 +59,7 @@ export const facultyApi = {
 
   // Create faculty
   create: async (data: CreateFacultyData): Promise<Faculty> => {
-    return makeRequest('/faculties/register/', {
+    return makeRequest('/faculties/', {
       method: 'POST',
       body: JSON.stringify(data),
     });
@@ -297,7 +297,7 @@ export const collegeApi = {
 export const userApi = {
   // Get current user profile
   getProfile: async () => {
-    const response = await fetch(`${API_BASE_URL}/user/profile/`, {
+    const response = await fetch(`${API_BASE_URL}/profile/`, {
       headers: getAuthHeaders(),
     });
     return handleApiResponse(response);

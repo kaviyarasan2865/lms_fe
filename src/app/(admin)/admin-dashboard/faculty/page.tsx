@@ -3,7 +3,8 @@ import { useState, useEffect } from "react";
 
 interface Faculty {
   id: string;
-  fullName: string;
+  firstName: string;
+  lastName: string;
   mobileNumber: string;
   email: string;
   designation: string;
@@ -57,6 +58,21 @@ const DEPARTMENTS = [
 const FacultyManagement = () => {
   // Subject list for mapping names to IDs
   const [subjectList, setSubjectList] = useState<{ id: number; name: string }[]>([]);
+  const [currentUser, setCurrentUser] = useState<any>(null);
+
+  // Fetch current user and college info
+  useEffect(() => {
+    const fetchUserProfile = async () => {
+      try {
+        const { userApi } = await import("@/lib/api");
+        const profile = await userApi.getProfile();
+        setCurrentUser(profile);
+      } catch (error) {
+        console.error("Failed to fetch user profile:", error);
+      }
+    };
+    fetchUserProfile();
+  }, []);
 
   // Fetch subject list on mount
   useEffect(() => {
@@ -72,6 +88,25 @@ const FacultyManagement = () => {
         } else if (Array.isArray(apiData) && apiData.length > 0) {
           subjects = apiData[0].subjects_list || apiData[0].subjects || [];
         }
+        
+        // If no subjects from faculty, try to fetch from subjects endpoint
+        if (subjects.length === 0) {
+          try {
+            const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000/api'}/subjects/`, {
+              headers: {
+                'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
+                'Content-Type': 'application/json',
+              },
+            });
+            if (response.ok) {
+              const subjectsData = await response.json();
+              subjects = Array.isArray(subjectsData) ? subjectsData.map((s: any) => ({ id: s.id, name: s.name })) : [];
+            }
+          } catch (error) {
+            console.error("Failed to fetch subjects:", error);
+          }
+        }
+        
         setSubjectList(subjects);
       } catch {
         setSubjectList([]);
@@ -79,6 +114,7 @@ const FacultyManagement = () => {
     };
     fetchSubjects();
   }, []);
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -98,22 +134,32 @@ const FacultyManagement = () => {
             : Array.isArray(apiData)
               ? apiData
               : [];
-          const mappedFaculty = facultyArray.map((f: any) => ({
-            id: String(f.id),
-            fullName: `${f.user?.first_name || f.first_name || ""} ${f.user?.last_name || f.last_name || ""}`.trim(),
-            mobileNumber: f.user?.phone_number || f.phone_number || f.user?.mobileNumber || f.mobileNumber || "",
-            email: f.user?.email || f.email || "",
-            designation: f.designation || "",
-            status: f.status || "inactive",
-            subjects: Array.isArray(f.subjects_list) && f.subjects_list.length > 0
-              ? f.subjects_list.map((s: any) => s.name)
-              : Array.isArray(f.subjects) && f.subjects.length > 0
-                ? f.subjects.map((s: any) => s.name)
-                : [],
-            educationDetails: f.education_details || "",
-            dateAdded: f.created_at || "",
-            department: f.department || ""
-          }));
+          const mappedFaculty = facultyArray.map((f: any) => {
+            const firstName = f.user?.first_name || f.first_name || "";
+            const lastName = f.user?.last_name || f.last_name || "";
+            const mobileNumber = f.user?.phone_number || f.phone_number || "";
+            // subjects: backend returns as array of names (['Anatomy', ...])
+            let subjects: string[] = [];
+            if (Array.isArray(f.subjects)) {
+              subjects = f.subjects.map((s: any) => typeof s === 'string' ? s : s?.name || "");
+            }
+            else if (Array.isArray(f.subjects_list)) {
+              subjects = f.subjects_list.map((s: any) => typeof s === 'string' ? s : s?.name || "");
+            }
+            return {
+              id: String(f.id),
+              firstName,
+              lastName,
+              mobileNumber,
+              email: f.user?.email || f.email || "",
+              designation: f.designation || "",
+              status: f.status || "inactive",
+              subjects,
+              educationDetails: f.education_details || "",
+              dateAdded: f.created_at || "",
+              department: f.department || ""
+            };
+          });
         console.log("Mapped faculty for UI:", mappedFaculty);
         setFaculty(mappedFaculty);
       } catch (err) {
@@ -125,6 +171,7 @@ const FacultyManagement = () => {
     };
     fetchFaculty();
   }, []);
+
   const [showForm, setShowForm] = useState(false);
   const [selectedSubjects, setSelectedSubjects] = useState<string[]>([]);
   const [customSubject, setCustomSubject] = useState("");
@@ -143,7 +190,8 @@ const FacultyManagement = () => {
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
 
   const [formData, setFormData] = useState({
-    fullName: "",
+    firstName: "",
+    lastName: "",
     mobileNumber: "",
     email: "",
     designation: "",
@@ -160,8 +208,8 @@ const FacultyManagement = () => {
   // Validation function
   const validateForm = () => {
     const errors: {[key: string]: string} = {};
-    
-    if (!formData.fullName.trim()) errors.fullName = "Full name is required";
+    if (!formData.firstName.trim()) errors.firstName = "First name is required";
+    if (!formData.lastName.trim()) errors.lastName = "Last name is required";
     if (!formData.email.trim()) errors.email = "Email is required";
     else if (!/\S+@\S+\.\S+/.test(formData.email)) errors.email = "Invalid email format";
     if (!formData.mobileNumber.trim()) errors.mobileNumber = "Mobile number is required";
@@ -169,21 +217,20 @@ const FacultyManagement = () => {
     if (!formData.designation) errors.designation = "Designation is required";
     if (!formData.department) errors.department = "Department is required";
     if (selectedSubjects.length === 0) errors.subjects = "At least one subject is required";
-    
     // Check for duplicate email (excluding current editing faculty)
     const duplicateEmail = faculty.find(f => 
       f.email.toLowerCase() === formData.email.toLowerCase() && 
       f.id !== editingFaculty?.id
     );
     if (duplicateEmail) errors.email = "Email already exists";
-    
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
   };
 
   const resetForm = () => {
     setFormData({
-      fullName: "",
+      firstName: "",
+      lastName: "",
       mobileNumber: "",
       email: "",
       designation: "",
@@ -226,38 +273,27 @@ const FacultyManagement = () => {
 
   const handleSubmit = async () => {
     if (!validateForm()) return;
-    
     setIsSubmitting(true);
-    
     try {
       const { facultyApi } = await import("@/lib/api");
-      // Prepare API payload
-      const nameParts = formData.fullName.trim().split(" ");
-      const firstName = nameParts[0] || "";
-      // If only one name part, set last_name to '.'
-      const lastName = nameParts.length > 1 ? nameParts.slice(1).join(" ") : ".";
-
       // Map selectedSubjects (names) to subject IDs using subjectList
       const subject_ids = selectedSubjects
         .map(name => subjectList.find(s => s.name === name)?.id)
         .filter((id): id is number => !!id);
-
       const payload = {
         username: formData.email.split("@")[0],
         email: formData.email,
-        first_name: firstName,
-        last_name: lastName,
+        first_name: formData.firstName,
+        last_name: formData.lastName,
         password: "faculty123", // TODO: allow password input if needed
         password_confirm: "faculty123",
-        college_id: 1, // TODO: fetch actual college_id from context
+        college_id: currentUser?.college_admin_profile?.id || 1, // Get college_id from admin profile
         designation: formData.designation,
         status: formData.status,
         education_details: formData.educationDetails,
         department: formData.department,
         subject_ids,
-        user: {
-          phone_number: formData.mobileNumber,
-        },
+        phone_number: formData.mobileNumber,
       };
       if (editingFaculty) {
         const updatePayload = { ...payload, id: Number(editingFaculty.id) };
@@ -274,18 +310,31 @@ const FacultyManagement = () => {
         : Array.isArray(apiData)
           ? apiData
           : [];
-      const mappedFaculty = facultyArray.map((f: any) => ({
-        id: String(f.id),
-        fullName: `${f.user?.first_name || f.first_name || ""} ${f.user?.last_name || f.last_name || ""}`.trim(),
-        mobileNumber: f.user?.phone_number || f.phone_number || "",
-        email: f.user?.email || f.email || "",
-        designation: f.designation || "",
-        status: f.status || "inactive",
-        subjects: (f.subjects_list || f.subjects || []).map((s: any) => s?.name || s),
-        educationDetails: f.education_details || "",
-        dateAdded: f.created_at || "",
-        department: f.department || ""
-      }));
+      const mappedFaculty = facultyArray.map((f: any) => {
+        const firstName = f.user?.first_name || f.first_name || "";
+        const lastName = f.user?.last_name || f.last_name || "";
+        const mobileNumber = f.user?.phone_number || f.phone_number || "";
+        let subjects: string[] = [];
+        if (Array.isArray(f.subjects)) {
+          subjects = f.subjects.map((s: any) => typeof s === 'string' ? s : s?.name || "");
+        }
+        else if (Array.isArray(f.subjects_list)) {
+          subjects = f.subjects_list.map((s: any) => typeof s === 'string' ? s : s?.name || "");
+        }
+        return {
+          id: String(f.id),
+          firstName,
+          lastName,
+          mobileNumber,
+          email: f.user?.email || f.email || "",
+          designation: f.designation || "",
+          status: f.status || "inactive",
+          subjects,
+          educationDetails: f.education_details || "",
+          dateAdded: f.created_at || "",
+          department: f.department || ""
+        };
+      });
       setFaculty(mappedFaculty);
       resetForm();
       setShowForm(false);
@@ -298,13 +347,14 @@ const FacultyManagement = () => {
 
   const handleEdit = (member: Faculty) => {
     setFormData({
-      fullName: member.fullName,
+      firstName: member.firstName,
+      lastName: member.lastName,
       mobileNumber: member.mobileNumber,
       email: member.email,
       designation: member.designation,
       status: member.status,
       educationDetails: member.educationDetails,
-      department: member.department || "" 
+      department: member.department || ""
     });
     setSelectedSubjects(member.subjects);
     setEditingFaculty(member);
@@ -326,7 +376,8 @@ const FacultyManagement = () => {
           : [];
       const mappedFaculty = facultyArray.map((f: any) => ({
         id: String(f.id),
-        fullName: `${f.user?.first_name || f.first_name || ""} ${f.user?.last_name || f.last_name || ""}`.trim(),
+        firstName: f.user?.first_name || f.first_name || "",
+        lastName: f.user?.last_name || f.last_name || "",
         mobileNumber: f.user?.phone_number || f.phone_number || f.user?.mobileNumber || f.mobileNumber || "",
         email: f.user?.email || f.email || "",
         designation: f.designation || "",
@@ -361,7 +412,8 @@ const FacultyManagement = () => {
   // Filter and sort faculty
   const filteredAndSortedFaculty = faculty
     .filter(member => {
-      const matchesSearch = member.fullName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      const matchesSearch = member.firstName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                           member.lastName.toLowerCase().includes(searchTerm.toLowerCase()) ||
                            member.email.toLowerCase().includes(searchTerm.toLowerCase());
       const matchesDesignation = !designationFilter || member.designation === designationFilter;
       const matchesStatus = !statusFilter || member.status === statusFilter;
@@ -374,8 +426,8 @@ const FacultyManagement = () => {
       
       switch (sortBy) {
         case 'name':
-          aValue = a.fullName;
-          bValue = b.fullName;
+          aValue = `${a.firstName} ${a.lastName}`;
+          bValue = `${b.firstName} ${b.lastName}`;
           break;
         case 'designation':
           aValue = a.designation;
@@ -409,7 +461,7 @@ const FacultyManagement = () => {
     <div className="bg-white p-4 rounded-lg border border-gray-200 shadow-sm hover:shadow-md transition-shadow">
       <div className="flex justify-between items-start mb-3">
         <div className="flex-1">
-          <h3 className="font-semibold text-gray-900 text-lg">{member.fullName}</h3>
+          <h3 className="font-semibold text-gray-900 text-lg">{member.firstName} {member.lastName}</h3>
           <p className="text-sm text-gray-600">{member.designation}</p>
           <p className="text-xs text-gray-500">{member.department}</p>
         </div>
@@ -559,17 +611,30 @@ const FacultyManagement = () => {
                 <h3 className="text-lg font-medium text-gray-900 mb-4">Personal Information</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-900 mb-2">Full Name *</label>
+                    <label className="block text-sm font-medium text-gray-900 mb-2">First Name *</label>
                     <input
                       type="text"
-                      value={formData.fullName}
-                      onChange={(e) => handleInputChange('fullName', e.target.value)}
-                      placeholder="Dr. John Doe"
+                      value={formData.firstName}
+                      onChange={(e) => handleInputChange('firstName', e.target.value)}
+                      placeholder="John"
                       className={`w-full p-3 border rounded-lg bg-white focus:ring-2 focus:ring-blue-500 outline-none ${
-                        formErrors.fullName ? 'border-red-500' : 'border-gray-300'
+                        formErrors.firstName ? 'border-red-500' : 'border-gray-300'
                       }`}
                     />
-                    {formErrors.fullName && <p className="text-red-500 text-xs mt-1">{formErrors.fullName}</p>}
+                    {formErrors.firstName && <p className="text-red-500 text-xs mt-1">{formErrors.firstName}</p>}
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-900 mb-2">Last Name *</label>
+                    <input
+                      type="text"
+                      value={formData.lastName}
+                      onChange={(e) => handleInputChange('lastName', e.target.value)}
+                      placeholder="Doe"
+                      className={`w-full p-3 border rounded-lg bg-white focus:ring-2 focus:ring-blue-500 outline-none ${
+                        formErrors.lastName ? 'border-red-500' : 'border-gray-300'
+                      }`}
+                    />
+                    {formErrors.lastName && <p className="text-red-500 text-xs mt-1">{formErrors.lastName}</p>}
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-900 mb-2">Mobile Number *</label>
@@ -940,7 +1005,7 @@ const FacultyManagement = () => {
                   <tr key={member.id} className="border-t border-gray-200 hover:bg-gray-50">
                     <td className="p-3">
                       <div>
-                        <div className="font-medium text-gray-900">{member.fullName}</div>
+                        <div className="font-medium text-gray-900">{member.firstName} {member.lastName}</div>
                         <div className="text-sm text-gray-500">Added: {new Date(member.dateAdded).toLocaleDateString()}</div>
                       </div>
                     </td>
@@ -1059,11 +1124,11 @@ const FacultyManagement = () => {
                   <div className="flex items-start gap-4">
                     <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center">
                       <span className="text-2xl font-bold text-blue-600">
-                        {selectedFaculty.fullName.split(' ').map(n => n[0]).join('').slice(0, 2)}
+                        {selectedFaculty.firstName.split(' ').map(n => n[0]).join('').slice(0, 2)}
                       </span>
                     </div>
                     <div>
-                      <h2 className="text-2xl font-bold text-gray-900">{selectedFaculty.fullName}</h2>
+                      <h2 className="text-2xl font-bold text-gray-900">{selectedFaculty.firstName} {selectedFaculty.lastName}</h2>
                       <p className="text-lg text-gray-600">{selectedFaculty.designation}</p>
                       <p className="text-sm text-gray-500">{selectedFaculty.department}</p>
                     </div>
@@ -1196,7 +1261,7 @@ const FacultyManagement = () => {
                 <p className="text-gray-700 mb-6">
                   Are you sure you want to remove{' '}
                   <span className="font-semibold">
-                    {faculty.find(f => f.id === showDeleteConfirm)?.fullName}
+                    {faculty.find(f => f.id === showDeleteConfirm)?.firstName} {faculty.find(f => f.id === showDeleteConfirm)?.lastName}
                   </span>{' '}
                   from the faculty list?
                 </p>
