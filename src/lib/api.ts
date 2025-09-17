@@ -106,9 +106,25 @@ export const facultyApi = {
     return;
   },
 };
+
+// Subject API functions
+export const subjectApi = {
+  // Get all subjects
+  getAll: async () => {
+    return makeRequest('/subjects/');
+  },
+  
+  // Create new subject
+  create: async (data: { name: string; code?: string; description?: string }) => {
+    return makeRequest('/subjects/', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+};
+
 // API service functions for LMS
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000/api';
-
 
 // Types
 export interface AcademicYear {

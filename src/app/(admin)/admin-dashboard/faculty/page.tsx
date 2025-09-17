@@ -15,36 +15,13 @@ interface Faculty {
   department: string;
 }
 
-const MEDICAL_SUBJECTS = [
-  "Anatomy",
-  "Physiology", 
-  "Biochemistry",
-  "Pathology",
-  "Internal Medicine",
-  "Surgery",
-  "Pediatrics",
-  "Obstetrics & Gynecology",
-  "Ophthalmology",
-  "ENT",
-  "Orthopedics",
-  "Dermatology",
-  "Psychiatry",
-  "Radiology",
-  "Anesthesiology",
-  "Pharmacology",
-  "Microbiology",
-  "Forensic Medicine",
-  "Community Medicine",
-  "Emergency Medicine"
-];
-
 const DESIGNATIONS = [
   { value: "assistant_professor", label: "Assistant Professor" },
-{ value: "professor", label: "Professor" },
-{ value: "hod", label: "Head of Department" },
-{ value: "dean", label: "Dean" },
-{ value: "lecturer", label: "Lecturer" },
-{ value: "senior_lecturer", label: "Senior Lecturer" }
+  { value: "professor", label: "Professor" },
+  { value: "hod", label: "Head of Department" },
+  { value: "dean", label: "Dean" },
+  { value: "lecturer", label: "Lecturer" },
+  { value: "senior_lecturer", label: "Senior Lecturer" }
 ];
 
 const DEPARTMENTS = [
@@ -59,6 +36,7 @@ const FacultyManagement = () => {
   // Subject list for mapping names to IDs
   const [subjectList, setSubjectList] = useState<{ id: number; name: string }[]>([]);
   const [currentUser, setCurrentUser] = useState<any>(null);
+  const [subjectsLoading, setSubjectsLoading] = useState(true);
 
   // Fetch current user and college info
   useEffect(() => {
@@ -66,6 +44,7 @@ const FacultyManagement = () => {
       try {
         const { userApi } = await import("@/lib/api");
         const profile = await userApi.getProfile();
+        console.log("User profile:", profile);
         setCurrentUser(profile);
       } catch (error) {
         console.error("Failed to fetch user profile:", error);
@@ -77,39 +56,27 @@ const FacultyManagement = () => {
   // Fetch subject list on mount
   useEffect(() => {
     const fetchSubjects = async () => {
+      setSubjectsLoading(true);
       try {
-        const { facultyApi } = await import("@/lib/api");
-        // Try both subjects and subjects_list from first faculty, fallback to empty
-        const apiData = await facultyApi.getAll();
+        // First try to fetch from subjects endpoint
+        const { subjectApi } = await import("@/lib/api");
+        const subjectsData = await subjectApi.getAll();
+        console.log("Raw subjects API response:", subjectsData);
+        
         let subjects: { id: number; name: string }[] = [];
-        if (apiData && typeof apiData === 'object' && 'results' in apiData && Array.isArray((apiData as any).results)) {
-          const first = (apiData as any).results[0];
-          subjects = first?.subjects_list || first?.subjects || [];
-        } else if (Array.isArray(apiData) && apiData.length > 0) {
-          subjects = apiData[0].subjects_list || apiData[0].subjects || [];
+        if (Array.isArray(subjectsData)) {
+          subjects = subjectsData.map((s: any) => ({ id: s.id, name: s.name }));
+        } else if (subjectsData && typeof subjectsData === 'object' && 'results' in subjectsData) {
+          subjects = (subjectsData as any).results.map((s: any) => ({ id: s.id, name: s.name }));
         }
         
-        // If no subjects from faculty, try to fetch from subjects endpoint
-        if (subjects.length === 0) {
-          try {
-            const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000/api'}/subjects/`, {
-              headers: {
-                'Authorization': `Bearer ${localStorage.getItem('access_token')}`,
-                'Content-Type': 'application/json',
-              },
-            });
-            if (response.ok) {
-              const subjectsData = await response.json();
-              subjects = Array.isArray(subjectsData) ? subjectsData.map((s: any) => ({ id: s.id, name: s.name })) : [];
-            }
-          } catch (error) {
-            console.error("Failed to fetch subjects:", error);
-          }
-        }
-        
+        console.log("Processed subjects:", subjects);
         setSubjectList(subjects);
-      } catch {
+      } catch (error) {
+        console.error("Failed to fetch subjects:", error);
         setSubjectList([]);
+      } finally {
+        setSubjectsLoading(false);
       }
     };
     fetchSubjects();
@@ -254,12 +221,38 @@ const FacultyManagement = () => {
     }
   };
 
-  const handleAddCustomSubject = () => {
+  const handleAddCustomSubject = async () => {
     if (customSubject.trim() && !selectedSubjects.includes(customSubject.trim())) {
-      setSelectedSubjects(prev => [...prev, customSubject.trim()]);
-      setCustomSubject("");
-      if (formErrors.subjects) {
-        setFormErrors(prev => ({ ...prev, subjects: "" }));
+      try {
+        // First, try to create the subject in the database
+        const { subjectApi } = await import("@/lib/api");
+        const newSubject = await subjectApi.create({
+          name: customSubject.trim(),
+          code: `${customSubject.trim().substring(0, 3).toUpperCase()}001`,
+          description: `${customSubject.trim()} - Custom subject`
+        });
+        
+        // Add to local subject list
+        setSubjectList(prev => [...prev, { id: newSubject.id, name: newSubject.name }]);
+        
+        // Add to selected subjects
+        setSelectedSubjects(prev => [...prev, customSubject.trim()]);
+        setCustomSubject("");
+        
+        if (formErrors.subjects) {
+          setFormErrors(prev => ({ ...prev, subjects: "" }));
+        }
+        
+        setSuccess("Custom subject created and added successfully!");
+      } catch (error) {
+        console.error("Failed to create custom subject:", error);
+        // Fallback: just add to selected subjects without database creation
+        setSelectedSubjects(prev => [...prev, customSubject.trim()]);
+        setCustomSubject("");
+        
+        if (formErrors.subjects) {
+          setFormErrors(prev => ({ ...prev, subjects: "" }));
+        }
       }
     }
   };
@@ -276,10 +269,18 @@ const FacultyManagement = () => {
     setIsSubmitting(true);
     try {
       const { facultyApi } = await import("@/lib/api");
+      
+      // Debug: Log the current state
+      console.log("Selected subjects:", selectedSubjects);
+      console.log("Subject list:", subjectList);
+      
       // Map selectedSubjects (names) to subject IDs using subjectList
       const subject_ids = selectedSubjects
         .map(name => subjectList.find(s => s.name === name)?.id)
         .filter((id): id is number => !!id);
+      
+      console.log("Mapped subject_ids:", subject_ids);
+      
       const payload = {
         username: formData.email.split("@")[0],
         email: formData.email,
@@ -295,6 +296,8 @@ const FacultyManagement = () => {
         subject_ids,
         phone_number: formData.mobileNumber,
       };
+      
+      console.log("Final payload:", payload);
       if (editingFaculty) {
         const updatePayload = { ...payload, id: Number(editingFaculty.id) };
         await facultyApi.update(Number(editingFaculty.id), updatePayload);
@@ -737,15 +740,15 @@ const FacultyManagement = () => {
                 <div className="mb-4">
                   <label className="block text-sm font-medium text-gray-900 mb-3">Select Subjects</label>
                   <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 max-h-48 overflow-y-auto border border-gray-200 rounded-lg p-4">
-                    {MEDICAL_SUBJECTS.map(subject => (
-                      <label key={subject} className="flex items-center gap-2 cursor-pointer hover:bg-gray-50 p-1 rounded">
+                    {subjectList.map(subject => (
+                      <label key={subject.name} className="flex items-center gap-2 cursor-pointer hover:bg-gray-50 p-1 rounded">
                         <input
                           type="checkbox"
-                          checked={selectedSubjects.includes(subject)}
-                          onChange={() => handleSubjectToggle(subject)}
+                          checked={selectedSubjects.includes(subject.name)}
+                          onChange={() => handleSubjectToggle(subject.name)}
                           className="w-4 h-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
                         />
-                        <span className="text-sm text-gray-900">{subject}</span>
+                        <span className="text-sm text-gray-900">{subject.name}</span>
                       </label>
                     ))}
                   </div>
@@ -837,7 +840,7 @@ const FacultyManagement = () => {
         {/* Faculty List */}
         <div className="bg-white p-4 sm:p-6 rounded-lg border border-gray-200 shadow-sm">
           <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-4 gap-4">
-            <div className="flex items-center gap-4">
+            <div>
               <h2 className="text-xl font-semibold text-gray-900">Faculty Members</h2>
               <div className="flex items-center gap-2">
                 <button
