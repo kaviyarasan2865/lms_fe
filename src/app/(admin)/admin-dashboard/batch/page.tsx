@@ -571,17 +571,7 @@ const BatchManagement = () => {
               <div>
                 <h3 className="text-base sm:text-lg font-medium text-gray-900 mb-3 sm:mb-4">Promotion Settings</h3>
                 <div className="space-y-3 sm:space-y-4">
-                  <div className="flex items-start gap-3">
-                      <input 
-                        type="checkbox" 
-                        id="auto-promote" 
-                        checked={formData.auto_promote}
-                        onChange={(e) => setFormData({...formData, auto_promote: e.target.checked})}
-                        className="w-4 h-4 mt-1 text-blue-600 focus:ring-blue-500 border-gray-300 rounded" 
-                        suppressHydrationWarning
-                      />
-                    <label htmlFor="auto-promote" className="text-gray-900 text-sm sm:text-base">Auto-promote students after specified duration</label>
-                  </div>
+                  
                   <div>
                     <label className="block text-sm font-medium text-gray-900 mb-2">Duration (days)</label>
                       <input
@@ -594,17 +584,7 @@ const BatchManagement = () => {
                         suppressHydrationWarning
                       />
                   </div>
-                  <div className="flex items-start gap-3">
-                      <input 
-                        type="checkbox" 
-                        id="editable" 
-                        checked={formData.editable}
-                        onChange={(e) => setFormData({...formData, editable: e.target.checked})}
-                        className="w-4 h-4 mt-1 text-blue-600 focus:ring-blue-500 border-gray-300 rounded" 
-                        suppressHydrationWarning
-                      />
-                    <label htmlFor="editable" className="text-gray-900 text-sm sm:text-base">Editable (students can modify their details)</label>
-                  </div>
+                  
                 </div>
               </div>
 
