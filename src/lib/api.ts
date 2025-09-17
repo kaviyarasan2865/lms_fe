@@ -40,9 +40,16 @@ export interface UpdateFacultyData extends Partial<CreateFacultyData> {
 }
 // Faculty API functions
 export const facultyApi = {
-  // Get all faculty
+  // Get all faculty (handles paginated and array responses)
   getAll: async (): Promise<Faculty[]> => {
-    return makeRequest('/faculties/');
+    const data = await makeRequest('/faculties/');
+    if (data && typeof data === 'object' && 'results' in data && Array.isArray(data.results)) {
+      return data.results;
+    }
+    if (Array.isArray(data)) {
+      return data;
+    }
+    return [];
   },
 
   // Get faculty by ID
