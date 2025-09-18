@@ -65,29 +65,73 @@ const BatchManagement = () => {
   });
 
   const [batches, setBatches] = useState<LocalBatch[]>([]);
+  const [nameManuallyEdited, setNameManuallyEdited] = useState(false);
+  const [autoDates, setAutoDates] = useState(true);
 
-  // Load batches and college info on component mount
+  const formatDate = (d: Date) => {
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
+  const addDays = (date: Date, days: number) => {
+    const d = new Date(date);
+    d.setDate(d.getDate() + days);
+    return d;
+  };
+
+  const generateBatchName = (course: string, college: string, year: number) => {
+    const parts = [course, college, String(year)].filter(Boolean);
+    return parts.join(' - ');
+  };
+
+  const calculateAcademicYearsByDuration = (yearOfJoining: number, durationDays: number) => {
+    const baseStart = new Date(yearOfJoining, 0, 1); 
+
+    return formData.academic_years.map((year, index) => {
+      const start = addDays(baseStart, index * durationDays);
+      const end = addDays(start, Math.max(durationDays, 1) - 1);
+      return {
+        ...year,
+        start_date: formatDate(start),
+        end_date: formatDate(end)
+      };
+    });
+  };
+
   useEffect(() => {
     loadBatches();
     loadCollegeInfo();
   }, []);
 
+  useEffect(() => {
+    if (!nameManuallyEdited) {
+      const autoName = generateBatchName(formData.course, collegeName, formData.year_of_joining);
+      setFormData(prev => ({ ...prev, name: autoName }));
+    }
+  }, [formData.course, formData.year_of_joining, collegeName]);
+
+  useEffect(() => {
+    if (autoDates && formData.year_of_joining && formData.auto_promote_after_days) {
+      const updatedYears = calculateAcademicYearsByDuration(formData.year_of_joining, formData.auto_promote_after_days);
+      setFormData(prev => ({ ...prev, academic_years: updatedYears }));
+    }
+  }, [formData.year_of_joining, formData.auto_promote_after_days, autoDates]);
+
   const loadBatches = async () => {
     try {
       setLoading(true);
-      setError(""); // Clear any previous errors
+      setError(""); 
       const data = await batchApi.getAll();
-      console.log('API Response:', data); // Debug log
-      
-      // Handle different response structures
+      console.log('API Response:', data); 
+
       let batchesData: LocalBatch[] = [];
       if (Array.isArray(data)) {
         batchesData = data;
       } else if (data && typeof data === 'object' && 'results' in data && Array.isArray((data as any).results)) {
-        // Handle paginated response
         batchesData = (data as any).results;
       } else if (data && typeof data === 'object' && 'data' in data && Array.isArray((data as any).data)) {
-        // Handle wrapped response
         batchesData = (data as any).data;
       }
       
@@ -95,7 +139,7 @@ const BatchManagement = () => {
     } catch (err) {
       console.error('Error loading batches:', err);
       setError(err instanceof Error ? err.message : 'Failed to load batches');
-      setBatches([]); // Set empty array on error
+      setBatches([]); 
     } finally {
       setLoading(false);
     }
@@ -104,9 +148,8 @@ const BatchManagement = () => {
   const loadCollegeInfo = async () => {
     try {
       const response = await collegeApi.getCurrent();
-      console.log('College API Response:', response); // Debug log
-      
-      // Handle paginated response
+      console.log('College API Response:', response); 
+
       let colleges = [];
       if (Array.isArray(response)) {
         colleges = response;
@@ -118,7 +161,6 @@ const BatchManagement = () => {
       
       if (colleges.length > 0) {
         setCollegeName(colleges[0].name);
-        // Store college ID for batch creation
         setFormData(prev => ({ ...prev, college_id: colleges[0].id }));
       }
     } catch (err) {
@@ -146,8 +188,8 @@ const BatchManagement = () => {
       
       const yearEnd = new Date(yearStart);
       yearEnd.setFullYear(yearOfJoining + index + 1);
-      yearEnd.setDate(yearEnd.getDate() - 1); // Day before next year starts
-      
+      yearEnd.setDate(yearEnd.getDate() - 1); 
+
       return {
         ...year,
         start_date: yearStart.toISOString().split('T')[0],
@@ -172,11 +214,13 @@ const BatchManagement = () => {
         { year: 4, label: 'Year 4', start_date: '', end_date: '', auto_promote: false, editable: true }
       ],
       editable: true,
-      college_id: formData.college_id // Preserve college_id
+      college_id: formData.college_id 
     });
     setEditingBatch(null);
     setError("");
     setSuccess("");
+    setNameManuallyEdited(false);
+    setAutoDates(true);
   };
 
   const handleFormSubmit = async () => {
@@ -185,7 +229,6 @@ const BatchManagement = () => {
       return;
     }
 
-    // Check if at least one academic year has dates
     const hasDates = formData.academic_years.some(year => year.start_date && year.end_date);
     if (!hasDates) {
       setError('Please select start and end dates for at least one academic year');
@@ -201,7 +244,6 @@ const BatchManagement = () => {
       setLoading(true);
       setError("");
 
-      // Convert form data to API format
       const academicYearsData = formData.academic_years.map(year => ({
         year: year.year,
         label: year.label,
@@ -221,16 +263,13 @@ const BatchManagement = () => {
       };
 
       if (editingBatch) {
-        // Update existing batch
         await batchApi.update(editingBatch, batchData);
         setSuccess('Batch updated successfully!');
       } else {
-        // Create new batch
         await batchApi.create(batchData);
         setSuccess('Batch created successfully!');
       }
 
-      // Reload batches
       await loadBatches();
       setShowForm(false);
       resetForm();
@@ -242,7 +281,6 @@ const BatchManagement = () => {
   };
 
   const handleEditBatch = (batch: LocalBatch) => {
-    // Convert API academic years to form format
     const academicYears = batch.academic_years.map(apiYear => ({
       year: apiYear.year,
       label: apiYear.label,
@@ -252,7 +290,6 @@ const BatchManagement = () => {
       editable: apiYear.editable
     }));
 
-    // Ensure we have 4 years (fill missing ones with defaults)
     while (academicYears.length < 4) {
       const nextYear = academicYears.length + 1;
       academicYears.push({
@@ -269,14 +306,22 @@ const BatchManagement = () => {
       course: batch.course,
       year_of_joining: batch.year_of_joining,
       name: batch.name,
-      auto_promote: false, // Default to false for editing
+      auto_promote: false, 
       auto_promote_after_days: batch.auto_promote_after_days,
       academic_years: academicYears,
-      editable: true, // Default to true for editing
-      college_id: batch.college // Use the college ID from the batch
+      editable: true, 
+      college_id: batch.college 
     });
     setEditingBatch(batch.id);
     setShowForm(true);
+
+    // Determine if the current name is auto-generated; if yes, allow auto-updates to continue
+    const proposedAutoName = generateBatchName(batch.course, collegeName, batch.year_of_joining);
+    const isCustomName = (batch.name || '').trim() !== (proposedAutoName || '').trim();
+    setNameManuallyEdited(isCustomName);
+
+    // Do not auto-calc dates immediately on opening edit; enable auto calc when user changes Year/Duration
+    setAutoDates(false);
   };
 
   const deleteBatch = async (id: number) => {
@@ -298,10 +343,13 @@ const BatchManagement = () => {
     const updatedYears = [...formData.academic_years];
     updatedYears[index] = { ...updatedYears[index], [field]: value };
     
-    // If start date is changed for the first year, calculate all other years
     if (field === 'start_date' && index === 0 && value) {
       const calculatedYears = calculateAcademicYearDates(value, formData.year_of_joining);
       setFormData({ ...formData, academic_years: calculatedYears });
+      setAutoDates(false); 
+    } else if (field === 'start_date' || field === 'end_date') {
+      setFormData({ ...formData, academic_years: updatedYears });
+      setAutoDates(false); 
     } else {
       setFormData({ ...formData, academic_years: updatedYears });
     }
@@ -320,7 +368,6 @@ const BatchManagement = () => {
   return (
     <div className="min-h-screen bg-gray-50 p-2 sm:p-4 lg:p-6 xl:p-8">
       <div className="max-w-7xl mx-auto space-y-4 sm:space-y-6">
-        {/* Header */}
         <div className="flex flex-col space-y-4 sm:space-y-0 sm:flex-row sm:justify-between sm:items-start">
           <div className="flex-1">
             <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900">Batch Management</h1>
@@ -335,7 +382,6 @@ const BatchManagement = () => {
           </button>
         </div>
 
-        {/* Error and Success Messages */}
         {error && (
           <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg">
             {error}
@@ -347,7 +393,6 @@ const BatchManagement = () => {
           </div>
         )}
 
-        {/* Form */}
         {showForm && (
           <div className="bg-white p-4 sm:p-6 rounded-lg border border-gray-200 shadow-sm">
             <h2 className="text-lg sm:text-xl font-semibold text-gray-900 mb-4 sm:mb-6">
@@ -355,7 +400,6 @@ const BatchManagement = () => {
             </h2>
             
             <div className="space-y-4 sm:space-y-6">
-              {/* College & Course Information */}
               <div>
                 <h3 className="text-base sm:text-lg font-medium text-gray-900 mb-3 sm:mb-4">College & Course Information</h3>
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4">
@@ -391,7 +435,6 @@ const BatchManagement = () => {
                 </div>
               </div>
 
-              {/* Batch Details */}
               <div>
                 <h3 className="text-base sm:text-lg font-medium text-gray-900 mb-3 sm:mb-4">Batch Details</h3>
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4">
@@ -399,7 +442,10 @@ const BatchManagement = () => {
                     <label className="block text-sm font-medium text-gray-900 mb-2">Year of Joining *</label>
                     <select 
                       value={formData.year_of_joining}
-                      onChange={(e) => setFormData({...formData, year_of_joining: parseInt(e.target.value)})}
+                      onChange={(e) => { 
+                        setFormData({...formData, year_of_joining: parseInt(e.target.value)});
+                        setAutoDates(true); // re-enable auto date calc on Year change during edit
+                      }}
                       className="w-full p-2.5 sm:p-3 border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-sm sm:text-base"
                       suppressHydrationWarning
                     >
@@ -416,8 +462,8 @@ const BatchManagement = () => {
                     <input
                       type="text"
                       value={formData.name}
-                      onChange={(e) => setFormData({...formData, name: e.target.value})}
-                      placeholder={`e.g., ${formData.course} ${formData.year_of_joining}`}
+                      onChange={(e) => { setFormData({...formData, name: e.target.value}); setNameManuallyEdited(true); }}
+                      placeholder={`e.g., ${generateBatchName(formData.course, collegeName || 'College', formData.year_of_joining)}`}
                       className="w-full p-2.5 sm:p-3 border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-sm sm:text-base"
                       required
                       suppressHydrationWarning
@@ -426,15 +472,13 @@ const BatchManagement = () => {
                 </div>
               </div>
 
-              {/* Academic Phases Configuration */}
               <div>
                 <h3 className="text-base sm:text-lg font-medium text-gray-900 mb-3 sm:mb-4">Academic Phases Configuration</h3>
                 <p className="text-sm text-gray-600 mb-4">Configure all 4 academic years. When you set the start date for Year 1, the other years will be automatically calculated.</p>
                 
-                {/* Mobile Card View */}
                 <div className="block xl:hidden space-y-3 sm:space-y-4">
                   {formData.academic_years.map((year, index) => (
-                    <div key={year.year} className="border border-gray-200 rounded-lg p-3 sm:p-4 bg-gray-50">
+                    <div key={year.year} className="border border-gray-200 rounded-lg p-3 sm:p-4 bg-gray-50 hover:bg-gray-100 transition-colors">
                       <h4 className="font-medium text-gray-900 mb-3">Year {year.year}</h4>
                       <div className="space-y-3">
                         <div>
@@ -496,7 +540,6 @@ const BatchManagement = () => {
                   ))}
                 </div>
 
-                {/* Desktop Table View */}
                 <div className="hidden xl:block overflow-x-auto">
                   <div className="min-w-full border border-gray-200 rounded-lg">
                     <div className="bg-gray-50 grid grid-cols-6 gap-0">
@@ -567,7 +610,6 @@ const BatchManagement = () => {
                 </div>
               </div>
 
-              {/* Promotion Settings */}
               <div>
                 <h3 className="text-base sm:text-lg font-medium text-gray-900 mb-3 sm:mb-4">Promotion Settings</h3>
                 <div className="space-y-3 sm:space-y-4">
@@ -577,7 +619,10 @@ const BatchManagement = () => {
                       <input
                         type="number"
                         value={formData.auto_promote_after_days}
-                        onChange={(e) => setFormData({...formData, auto_promote_after_days: parseInt(e.target.value) || 0})}
+                        onChange={(e) => { 
+                          setFormData({...formData, auto_promote_after_days: parseInt(e.target.value) || 0});
+                          setAutoDates(true); // re-enable auto date calc on Duration change during edit
+                        }}
                         className="w-full sm:w-32 p-2.5 sm:p-3 border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-sm sm:text-base"
                         min="1"
                         max="1095"
@@ -588,7 +633,6 @@ const BatchManagement = () => {
                 </div>
               </div>
 
-              {/* Action Buttons */}
               <div className="flex flex-col sm:flex-row gap-3 pt-4 border-t border-gray-200">
                 <button 
                   onClick={handleFormSubmit}
@@ -611,7 +655,6 @@ const BatchManagement = () => {
           </div>
         )}
 
-        {/* Existing Batches */}
         <div className="bg-white p-4 sm:p-6 rounded-lg border border-gray-200 shadow-sm">
           <div className="flex flex-col space-y-4 sm:space-y-0 sm:flex-row sm:justify-between sm:items-center gap-4 mb-4 sm:mb-6">
             <h2 className="text-lg sm:text-xl font-semibold text-gray-900">
@@ -619,7 +662,6 @@ const BatchManagement = () => {
               {loading && <span className="text-sm text-gray-500 ml-2">(Loading...)</span>}
             </h2>
             
-            {/* Search and Filter */}
             <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 w-full sm:w-auto">
               <input
                 type="text"
@@ -683,7 +725,6 @@ const BatchManagement = () => {
             </div>
           ) : (
             <>
-              {/* Mobile Card View */}
               <div className="block lg:hidden space-y-3 sm:space-y-4">
                 {Array.isArray(filteredBatches) && filteredBatches.map((batch) => (
                   <div key={batch.id} className="border border-gray-200 rounded-lg p-3 sm:p-4 bg-gray-50 hover:bg-gray-100 transition-colors">
@@ -736,7 +777,6 @@ const BatchManagement = () => {
                 ))}
               </div>
 
-              {/* Desktop Table View */}
               <div className="hidden lg:block overflow-x-auto">
                 <table className="w-full">
                   <thead className="bg-gray-50">
